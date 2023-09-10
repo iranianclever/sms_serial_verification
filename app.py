@@ -1,7 +1,9 @@
 from flask import Flask, jsonify, request
+import requests
+import config
 
+# Sample flask object
 app = Flask(__name__)
-
 
 @app.route("/")
 def main_page():
@@ -16,12 +18,17 @@ def process():
     sender = data['from']
     message = data['message']
     print(f'Received: {message} from {sender}')
+    send_sms(sender, 'Hi ' + message)
     ret = {'message': 'processed!'}
     return jsonify(ret), 200
 
 
-def send_sms():
-    pass
+def send_sms(receptor, message):
+    """ This function will get a MSISDN and a message, then uses KaveNegar to send sms.  """
+    url = f'https://api.kavenegar.com/v1/{config.API_KEY}/sms/send.json'
+    data = {'message': message, 'receptor': receptor}
+    response = requests.post(url, data)
+    print(f'message *{message}* send to receptor: {receptor}. status code is {response.status_code}')
 
 
 def check_serial():
