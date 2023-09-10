@@ -1,4 +1,5 @@
 from flask import Flask, jsonify, request
+from pandas import read_excel
 import requests
 import config
 
@@ -29,6 +30,15 @@ def send_sms(receptor, message):
     data = {'message': message, 'receptor': receptor}
     response = requests.post(url, data)
     print(f'message *{message}* send to receptor: {receptor}. status code is {response.status_code}')
+
+def import_database_from_excel(filepath):
+    """ Gets an excel file name and imports lookup data (data and failures) from it. """
+    # df contains lookup data in the form of
+    # Row - Reference Number - Description - Start Serial - End Serial - Date
+    # df contains lookup data in the form of
+    df = read_excel(filepath, 0)
+    for index, (line, ref, desc, start_serial, end_serial, data) in df.iterrows():
+        pass
 
 
 def check_serial():
