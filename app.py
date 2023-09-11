@@ -15,12 +15,12 @@ def main_page():
 
 @app.route('/v1/process', methods=['POST'])
 def process():
-    """ This is a callback from curl requests. will get sender and message and will check if it is valid, then answers back.  """
+    """ This is a callback from curl requests. will get sender and message and will check if it is valid, then answers back. """
     data = request.form
     sender = data['from']
     message = data['message']
     print(f'Received: {message} from {sender}')
-    send_sms(sender, 'Hi ' + message)
+    send_sms(sender, ('Hi ' + message))
     ret = {'message': 'processed!'}
     return jsonify(ret), 200
 
@@ -31,6 +31,7 @@ def send_sms(receptor, message):
     data = {'message': message, 'receptor': receptor}
     response = requests.post(url, data)
     print(f'message *{message}* send to receptor: {receptor}. status code is {response.status_code}')
+
 
 def import_database_from_excel(filepath):
     """ Gets an excel file name and imports lookup data (data and failures) from it.
@@ -70,7 +71,7 @@ def import_database_from_excel(filepath):
         query = f'INSERT INTO serials VALUES ("{line}", "{ref}", "{desc}", "{start_serial}", "{end_serial}", "{date}");'
         cur.execute(query)
         # TODO: do some more error handling
-        if serial_counter % 10:
+        if serial_counter % 10 == 0:
             conn.commit()
         serial_counter += 1
     conn.commit()
@@ -83,12 +84,11 @@ def import_database_from_excel(filepath):
     conn.commit()
     invalid_counter = 0
     df = read_excel(filepath, 1)
-    for index, failed_serial_row in df.iterrows():
-        failed_serial = failed_serial_row.values[0]
+    for index, (failed_serial, ) in df.iterrows():
         query = f'INSERT INTO invalids VALUES ("{failed_serial}")'
         cur.execute(query)
         # TODO: do some more error handling
-        if invalid_counter % 10:
+        if invalid_counter % 10 == 0:
             conn.commit()
         invalid_counter += 1
     conn.commit()
@@ -103,6 +103,4 @@ def check_serial():
 
 
 if __name__ == '__main__':
-    # app.run('0.0.0.0', 5000, debug=True)
-    a, b = import_database_from_excel('./data.xlsx')
-    print(f'inserted {a} rows and {b} invalids')
+    app.run('0.0.0.0', 5000, debug=True)
