@@ -38,7 +38,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV="/home/jihad/w/python/sms_serial_verification"
+VIRTUAL_ENV="/home/jihad/Desktop/sms_serial_verification"
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"

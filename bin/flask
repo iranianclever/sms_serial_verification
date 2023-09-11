@@ -1,4 +1,4 @@
-#!/home/jihad/w/python/sms_serial_verification/bin/python
+#!/home/jihad/Desktop/sms_serial_verification/bin/python
 # -*- coding: utf-8 -*-
 import re
 import sys

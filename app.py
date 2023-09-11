@@ -38,7 +38,11 @@ def import_database_from_excel(filepath):
     # df contains lookup data in the form of
     df = read_excel(filepath, 0)
     for index, (line, ref, desc, start_serial, end_serial, data) in df.iterrows():
-        pass
+        print(line, ref, desc, start_serial, end_serial, data)
+
+    df = read_excel(filepath, 1)
+    for index, failed_serial in df.iterrows():
+        print(failed_serial)
 
 
 def check_serial():
@@ -46,4 +50,5 @@ def check_serial():
 
 
 if __name__ == '__main__':
-    app.run('0.0.0.0', 5000, debug=True)
+    # app.run('0.0.0.0', 5000, debug=True)
+    import_database_from_excel('./data.xlsx')
