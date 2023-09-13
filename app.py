@@ -18,7 +18,7 @@ def process():
     """ This is a callback from curl requests. will get sender and message and will check if it is valid, then answers back. """
     data = request.form
     sender = data['from']
-    message = data['message']
+    message = normalize_string(data['message'])
     print(f'Received: {message} from {sender}')
     send_sms(sender, ('Hi ' + message))
     ret = {'message': 'processed!'}
@@ -31,6 +31,16 @@ def send_sms(receptor, message):
     data = {'message': message, 'receptor': receptor}
     response = requests.post(url, data)
     print(f'message *{message}* send to receptor: {receptor}. status code is {response.status_code}')
+
+
+def normalize_string(string):
+    """ Normalization of digits and letters, this function will convert invalid values to valid value to read from database. """
+    from_char = '۱۲۳۴۵۶۷۸۹۰'
+    to_char = '1234567890'
+    for i in range(len(from_char)):
+        string = str.replace(from_char[0], to_char[i])
+    string = str.upper()
+    return string
 
 
 def import_database_from_excel(filepath):
@@ -68,6 +78,8 @@ def import_database_from_excel(filepath):
     df = read_excel(filepath, 0)
     serial_counter = 0
     for index, (line, ref, desc, start_serial, end_serial, date) in df.iterrows():
+        start_serial = normalize_string(start_serial)
+        end_serial = normalize_string(end_serial)
         query = f'INSERT INTO serials VALUES ("{line}", "{ref}", "{desc}", "{start_serial}", "{end_serial}", "{date}");'
         cur.execute(query)
         # TODO: do some more error handling
