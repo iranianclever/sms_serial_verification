@@ -1,2 +1,4 @@
+# This is a sample config file, renaming to config.py and edit accordingly
+
 API_KEY = 'put your API key from kavenegar here'
 DATABASE_FILE_PATH = 'path to the file which is used by sqlite'
