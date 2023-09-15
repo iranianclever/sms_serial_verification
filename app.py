@@ -13,8 +13,8 @@ app = Flask(__name__)
 
 # config
 app.config.update(
-    DEBUG = True,
-    SECRET_KEY = config.SECRET_KEY
+    DEBUG=True,
+    SECRET_KEY=config.SECRET_KEY
 )
 
 
@@ -31,12 +31,14 @@ class User(UserMixin):
 
     def __repr__(self):
         return "%d" % (self.id)
-    
+
 
 # create some users with ids 1 to 20
 user = User(0)
 
 # some protected url
+
+
 @app.route('/')
 @login_required
 def home():
@@ -45,7 +47,7 @@ def home():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    if request.method == 'POST': # TODO: stop the brute force
+    if request.method == 'POST':  # TODO: stop the brute force
         username = request.form['username']
         password = request.form['password']
         if password == config.PASSWORD and username == config.USERNAME:
@@ -61,7 +63,7 @@ def login():
             <p><input type="submit" value="Login" /></p>
         </form>
 """)
-                        
+
 
 # somewhere to logout
 @app.route('/logout')
@@ -94,17 +96,32 @@ def send_sms(receptor, message):
     url = f'https://api.kavenegar.com/v1/{config.API_KEY}/sms/send.json'
     data = {'message': message, 'receptor': receptor}
     response = requests.post(url, data)
-    print(f'message *{message}* send to receptor: {receptor}. status code is {response.status_code}')
+    print(
+        f'message *{message}* send to receptor: {receptor}. status code is {response.status_code}')
 
 
-def normalize_string(data):
+def normalize_string(data, fixed_size=30):
     """ Normalization of digits and letters, this function will convert invalid values to valid value to read from database. """
-    from_char = '۱۲۳۴۵۶۷۸۹۰'
+    from_persian_char = '۱۲۳۴۵۶۷۸۹۰'
+    from_arabic_char = '١٢٣٤٥٦٧٨٩٠'
     to_char = '1234567890'
-    for i in range(len(from_char)):
-        data = data.replace(from_char[i], to_char[i])
+    for i in range(len(to_char)):
+        data = data.replace(from_persian_char[i], to_char[i])
+        data = data.replace(from_arabic_char[i], to_char[i])
     data = data.upper()
-    data = re.sub(r'\W+', '', data) # remove any non alphanumeric character
+    data = re.sub(r'\W+', '', data)  # remove any non alphanumeric character
+    all_alpha = ''
+    all_digit = ''
+    for c in data:
+        if c.isalpha():
+            all_alpha += c
+        elif c.isdigit():
+            all_digit += c
+
+    missing_zeros = fixed_size - len(all_alpha) - len(all_digit)
+
+    data = all_alpha + '0' * missing_zeros + all_digit
+
     return data
 
 
@@ -120,7 +137,7 @@ def import_database_from_excel(filepath):
     return two integers: (number of serial rows, number of invalid rows)
     """
     # df contains lookup data in the form of
-    
+
     # TODO: make sure that the data is imported correctly, we nned to backup the old one
     # TODO: do some normalization
 
@@ -183,13 +200,15 @@ def check_serial(serial):
     query = f"SELECT * FROM invalids WHERE invalid_serial == '{serial}';"
     results = cur.execute(query)
     if len(results.fetchall()) == 1:
-        return 'This serial is among failed ones' # TODO: return the string provided by the customer
-    
+        # TODO: return the string provided by the customer
+        return 'This serial is among failed ones'
+
     query = f"SELECT * FROM serials WHERE start_serial < '{serial}' AND end_serial > '{serial}';"
     results = cur.execute(query)
     if len(results.fetchall()) == 1:
-        return 'I found your serial' # TODO: return string provided by the customer.
-    
+        # TODO: return string provided by the customer.
+        return 'I found your serial'
+
     return 'It was not in the db'
 
 
@@ -199,7 +218,7 @@ def process():
     data = request.form
     sender = data['from']
     message = normalize_string(data['message'])
-    print(f'Received: {message} from {sender}') # TODO: logging
+    print(f'Received: {message} from {sender}')  # TODO: logging
 
     answer = check_serial(message)
 

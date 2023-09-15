@@ -13,3 +13,6 @@ A project to products sms serial verification
 - [ ]  the insert will fail if there is a ' or " in excel file
 - [x]  another 10 % problem :D
 - [x]  refactor name str in normalize function
+- [ ]  in normalize, convert AB001 TO AB00001 (max len? say 15)
+- [ ]  dockerize (alpine? search for uwsgi)
+- [x]  merge pull requests.. check I mean :)
