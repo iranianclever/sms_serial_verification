@@ -228,5 +228,5 @@ def process():
 
 
 if __name__ == '__main__':
-    import_database_from_excel('./data.xlsx')
+    import_database_from_excel('./../data.xlsx')
     app.run('0.0.0.0', 5000, debug=True)
