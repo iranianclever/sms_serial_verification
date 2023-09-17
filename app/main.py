@@ -1,8 +1,10 @@
-from flask import Flask, jsonify, request, Response, redirect, url_for, session, abort
-from flask_login import LoginManager, UserMixin, login_required, login_user, logout_user
-from pandas import read_excel
 import requests
 import re
+import os
+from flask import Flask, jsonify, flash, request, Response, redirect, url_for, session, abort
+from flask_login import LoginManager, UserMixin, login_required, login_user, logout_user
+from pandas import read_excel
+from werkzeug.utils import secure_filename
 import sqlite3
 import config
 
@@ -11,17 +13,26 @@ import config
 app = Flask(__name__)
 
 
-# config
-app.config.update(
-    DEBUG=True,
-    SECRET_KEY=config.SECRET_KEY
-)
-
+UPLOAD_FOLDER = config.UPLOAD_FOLDER
+ALLOWED_EXTENSIONS = config.ALLOWED_EXTENSIONS
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # flask-login
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
+
+
+def allowed_file(filename):
+    return '.' in filename and \
+        filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+# config
+app.config.update(
+    DEBUG=True,
+    SECRET_KEY=config.SECRET_KEY
+)
 
 
 class User(UserMixin):
@@ -39,10 +50,41 @@ user = User(0)
 # some protected url
 
 
-@app.route('/')
+@app.route('/', methods=['GET', 'POST'])
 @login_required
 def home():
-    return Response('Hello World!')
+    if request.method == 'POST':
+        if 'file' not in request.files:
+            flash('No file part')
+            session['message'] = 'No file part'
+            return redirect(request.url)
+        file = request.files['file']
+        # if user does not select file, browser also
+        # submit an empty part without filename
+        if file.filename == '':
+            flash('No selected file')
+            session['message'] = f'No selected file'
+            return redirect(request.url)
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(file_path)
+            rows, failures = import_database_from_excel(file_path)
+            session['message'] = f'Imported {rows} of serials and {failures} rows of failure'
+            os.remove(file_path)  # Remove file from file_path
+            return redirect('/')
+    message = session.get('message', '')
+    session['message'] = ''
+    return f'''
+    <!doctype html>
+    <title>Upload new File</title>
+    <h1>Upload new File</h1>
+    <h3>{message}</h3>
+    <form method="post" enctype="multipart/form-data">
+        <input type="file" name="file" />
+        <input type="submit" value="Upload" />
+    </form>
+    '''
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -228,5 +270,4 @@ def process():
 
 
 if __name__ == '__main__':
-    import_database_from_excel('./../data.xlsx')
     app.run('0.0.0.0', 5000, debug=True)
