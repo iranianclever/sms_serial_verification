@@ -17,5 +17,6 @@ A project to products sms serial verification
 - [x]  merge pull requests.. check I mean :)
 - [ ]  do proper inserts with INTO
 - [ ]  templates html
-- [ ]  H shafiee
+- [x]  H shafiee
 - [x]  rate limit
+- [ ]  add call back token on kavenegar site
