@@ -7,11 +7,14 @@ from pandas import read_excel
 from werkzeug.utils import secure_filename
 import sqlite3
 import config
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 
 # Sample flask object
 app = Flask(__name__)
 
+limiter = Limiter(get_remote_address, app=app, storage_uri="memory://")
 
 UPLOAD_FOLDER = config.UPLOAD_FOLDER
 ALLOWED_EXTENSIONS = config.ALLOWED_EXTENSIONS
@@ -88,8 +91,9 @@ def home():
 
 
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit('5 per minute')
 def login():
-    if request.method == 'POST':  # TODO: stop the brute force
+    if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
         if password == config.PASSWORD and username == config.USERNAME:
@@ -241,11 +245,11 @@ def check_serial(serial):
 
     query = f"SELECT * FROM invalids WHERE invalid_serial == '{serial}';"
     results = cur.execute(query)
-    if len(results.fetchall()) == 1:
+    if len(results.fetchall()) > 0:
         # TODO: return the string provided by the customer
         return 'This serial is among failed ones'
 
-    query = f"SELECT * FROM serials WHERE start_serial < '{serial}' AND end_serial > '{serial}';"
+    query = f"SELECT * FROM serials WHERE start_serial <= '{serial}' AND end_serial >= '{serial}';"
     results = cur.execute(query)
     if len(results.fetchall()) == 1:
         # TODO: return string provided by the customer.

@@ -7,7 +7,6 @@ A project to products sms serial verification
 - [x]  do more while normalizing, specially against SQLInjection. remove all non alpha numerical
 - [ ]  Atomic problem when I'm committing every 10 inserts
 - [x]  some health check url
-- [ ]  get input only from KaveNegar URL
 - [x]  there is problem with JJ1000000 and JJ100
 - [x]  create requirements.txt (pip freeze)
 - [ ]  the insert will fail if there is a ' or " in excel file
@@ -17,3 +16,6 @@ A project to products sms serial verification
 - [x]  dockerize (alpine? search for uwsgi)
 - [x]  merge pull requests.. check I mean :)
 - [ ]  do proper inserts with INTO
+- [ ]  templates html
+- [ ]  H shafiee
+- [x]  rate limit
