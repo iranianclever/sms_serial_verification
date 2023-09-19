@@ -1,7 +1,7 @@
 import requests
 import re
 import os
-from flask import Flask, jsonify, flash, request, Response, redirect, url_for, session, abort
+from flask import Flask, jsonify, flash, request, Response, redirect, url_for, session, abort, render_template
 from flask_login import LoginManager, UserMixin, login_required, login_user, logout_user
 from pandas import read_excel
 from werkzeug.utils import secure_filename
@@ -48,7 +48,6 @@ class User(UserMixin):
         return "%d" % (self.id)
 
 
-# create some users with ids 1 to 20
 user = User(0)
 
 # some protected url
@@ -79,7 +78,7 @@ def home():
             return redirect('/')
     message = session.get('message', '')
     session['message'] = ''
-    return f'''
+    html_str = f'''
     <!doctype html>
     <title>Upload new File</title>
     <h1>Upload new File</h1>
@@ -89,6 +88,7 @@ def home():
         <input type="submit" value="Upload" />
     </form>
     '''
+    return render_template('index.html')
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -103,13 +103,14 @@ def login():
         else:
             return abort(401)
     else:
-        return Response("""
+        html_str = Response("""
         <form action="" method="post">
             <p><input type="text" name="username" /></p>
             <p><input type="password" name="password" /></p>
             <p><input type="submit" value="Login" /></p>
         </form>
-""")
+        """)
+        return render_template('login.html')
 
 
 # somewhere to logout
