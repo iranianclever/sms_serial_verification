@@ -17,8 +17,19 @@
                     <div class="container">
                         <div class="row justify-content-center">
                             <div class="col-lg-5">
+
                                 <div class="card shadow-lg border-0 rounded-lg mt-5">
                                     <div class="card-header"><h3 class="text-center font-weight-light my-4">Login</h3></div>
+                                    {% with messages = get_flashed_messages() %}
+                                    {% if messages %}
+                                    {% for message in messages %}
+                                    <div class="alert alert-info alert-dismissible fade show mt-3 mx-3" role="alert">
+                                        {{ message }}
+                                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                    </div>
+                                    {% endfor %}
+                                    {% endif %}
+                                    {% endwith %}
                                     <div class="card-body">
                                         <form action="" method="post">
                                             <div class="form-floating mb-3">

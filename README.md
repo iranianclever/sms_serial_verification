@@ -16,7 +16,7 @@ A project to products sms serial verification
 - [x]  dockerize (alpine? search for uwsgi)
 - [x]  merge pull requests.. check I mean :)
 - [ ]  do proper inserts with INTO
-- [ ]  templates html
+- [x]  templates html
 - [x]  H shafiee
 - [x]  rate limit
-- [ ]  add call back token on kavenegar site
+- [x]  add call back token on kavenegar site
