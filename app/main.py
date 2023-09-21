@@ -1,7 +1,7 @@
 import requests
 import re
 import os
-from flask import Flask, jsonify, flash, request, Response, redirect, url_for, session, abort, render_template
+from flask import Flask, jsonify, flash, request, Response, redirect, url_for, abort, render_template
 from flask_login import LoginManager, UserMixin, login_required, login_user, logout_user
 from pandas import read_excel
 from werkzeug.utils import secure_filename
@@ -59,40 +59,26 @@ def home():
     if request.method == 'POST':
         if 'file' not in request.files:
             flash('No file part')
-            session['message'] = 'No file part'
             return redirect(request.url)
         file = request.files['file']
         # if user does not select file, browser also
         # submit an empty part without filename
         if file.filename == '':
             flash('No selected file')
-            session['message'] = f'No selected file'
             return redirect(request.url)
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(file_path)
             rows, failures = import_database_from_excel(file_path)
-            session['message'] = f'Imported {rows} of serials and {failures} rows of failure'
+            flash(f'Imported {rows} of serials and {failures} rows of failure')
             os.remove(file_path)  # Remove file from file_path
             return redirect('/')
-    message = session.get('message', '')
-    session['message'] = ''
-    html_str = f'''
-    <!doctype html>
-    <title>Upload new File</title>
-    <h1>Upload new File</h1>
-    <h3>{message}</h3>
-    <form method="post" enctype="multipart/form-data">
-        <input type="file" name="file" />
-        <input type="submit" value="Upload" />
-    </form>
-    '''
     return render_template('index.html')
 
 
 @app.route('/login', methods=['GET', 'POST'])
-@limiter.limit('5 per minute')
+@limiter.limit('10 per minute')
 def login():
     if request.method == 'POST':
         username = request.form['username']
@@ -111,13 +97,15 @@ def login():
 @login_required
 def logout():
     logout_user()
-    return Response('<p>Logged out</p>')
+    flash('Logged out')
+    return redirect('/login')
 
 
 # handle login failed
 @app.errorhandler(401)
 def page_not_found(error):
-    return Response('<p>Logon failed!</p>')
+    flash('Login problem')
+    return redirect('/login')
 
 
 # callback to reload the user object
