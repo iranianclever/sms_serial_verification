@@ -103,13 +103,6 @@ def login():
         else:
             return abort(401)
     else:
-        html_str = Response("""
-        <form action="" method="post">
-            <p><input type="text" name="username" /></p>
-            <p><input type="password" name="password" /></p>
-            <p><input type="submit" value="Login" /></p>
-        </form>
-        """)
         return render_template('login.html')
 
 
