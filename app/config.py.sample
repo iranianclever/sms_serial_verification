@@ -1,7 +1,12 @@
 # This is a sample config file, renaming to config.py and edit accordingly
 
 API_KEY = 'put your API key from kavenegar here'
-DATABASE_FILE_PATH = 'path to the file which is used by sqlite'
+
+# Mysql configs
+MYSQL_USERNAME = 'smsmysql'
+MYSQL_PASSWORD = 'testPassword'
+MYSQL_HOST = 'localhost'
+MYSQL_DB_NAME = 'smsmysql'
 
 # call back url from KaveNegar will look like
 # /v1/{CALL_BACK_TOKEN}/process
@@ -16,4 +21,5 @@ SECRET_KEY = 'random long string with alphanumeric + #()*&'
 
 # Do not change below unless you know that you are doing
 UPLOAD_FOLDER = '/tmp'
-ALLOWED_EXTENSIONS = {'txt', 'pdf', 'jpg'}
+ALLOWED_EXTENSIONS = {'xlsx'}
+

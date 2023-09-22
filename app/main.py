@@ -5,7 +5,7 @@ from flask import Flask, jsonify, flash, request, Response, redirect, url_for, a
 from flask_login import LoginManager, UserMixin, login_required, login_user, logout_user, current_user
 from pandas import read_excel
 from werkzeug.utils import secure_filename
-import sqlite3
+import MySQLdb
 import config
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -25,6 +25,10 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
+
+# Init mysql connection
+db = MySQLdb.connect(host=config.MYSQL_HOST, user=config.MYSQL_USERNAME,
+                     passwd=config.MYSQL_PASSWORD, db=config.MYSQL_DB_NAME)
 
 
 def allowed_file(filename):
