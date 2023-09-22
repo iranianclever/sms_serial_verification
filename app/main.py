@@ -194,9 +194,8 @@ def import_database_from_excel(filepath):
     for index, (line, ref, desc, start_serial, end_serial, date) in df.iterrows():
         start_serial = normalize_string(start_serial)
         end_serial = normalize_string(end_serial)
-        cur.execute("INSERT INTO serials VALUES (?, ?, ?, ?, ?, ?)", (
-            line, ref, desc, start_serial, end_serial, date)
-        )
+        query = f'INSERT INTO serials VALUES ("{line}", "{ref}", "{desc}", "{start_serial}", "{end_serial}", "{date}");'
+        cur.execute(query)
         # TODO: do some more error handling
         if serial_counter % 10 == 0:
             conn.commit()
@@ -213,7 +212,8 @@ def import_database_from_excel(filepath):
     df = read_excel(filepath, 1)
     for index, (failed_serial, ) in df.iterrows():
         failed_serial = normalize_string(failed_serial)
-        cur.execute('INSERT INTO invalids VALUES (?)', (failed_serial, ))
+        query = f'INSERT INTO invalids VALUES ("{failed_serial}");'
+        cur.execute(query)
         # TODO: do some more error handling
         if invalid_counter % 10 == 0:
             conn.commit()
@@ -230,14 +230,14 @@ def check_serial(serial):
     conn = sqlite3.connect(config.DATABASE_FILE_PATH)
     cur = conn.cursor()
 
-    results = cur.execute(
-        "SELECT * FROM invalids WHERE invalid_serial == ?", (serial, ))
+    query = f"SELECT * FROM invalids WHERE invalid_serial == '{serial}';"
+    results = cur.execute(query)
     if len(results.fetchall()) > 0:
         # TODO: return the string provided by the customer
         return 'This serial is among failed ones'
 
-    results = cur.execute(
-        "SELECT * FROM serials WHERE start_serial <= ? AND end_serial >= ?", (serial, serial))
+    query = f"SELECT * FROM serials WHERE start_serial <= '{serial}' AND end_serial >= '{serial}';"
+    results = cur.execute(query)
     if len(results.fetchall()) == 1:
         # TODO: return string provided by the customer.
         return 'I found your serial'

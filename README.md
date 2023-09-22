@@ -22,3 +22,4 @@ A project to products sms serial verification
 - [x]  add call back token on kavenegar site
 - [x]  we do not normalize the failed serials when importing!
 - [x]  invalids can have duplicates
+- [ ]  migrate to mysql
