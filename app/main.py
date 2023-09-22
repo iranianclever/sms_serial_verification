@@ -26,10 +26,6 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
-# Init mysql connection
-db = MySQLdb.connect(host=config.MYSQL_HOST, user=config.MYSQL_USERNAME,
-                     passwd=config.MYSQL_PASSWORD, db=config.MYSQL_DB_NAME)
-
 
 def allowed_file(filename):
     return '.' in filename and \
@@ -177,71 +173,76 @@ def import_database_from_excel(filepath):
     # TODO: make sure that the data is imported correctly, we nned to backup the old one
     # TODO: do some normalization
 
-    # Our sqlite database will contain two tables: serials and invalids
-    conn = sqlite3.connect(config.DATABASE_FILE_PATH)
-    cur = conn.cursor()
+    # Init mysql connection
+    db = MySQLdb.connect(host=config.MYSQL_HOST, user=config.MYSQL_USERNAME,
+                         passwd=config.MYSQL_PASSWORD, db=config.MYSQL_DB_NAME)
+
+    # Our mysql database will contain two tables: serials and invalids
+    cur = db.cursor()
 
     # Remove the serials table if exists, then create the new one
-    cur.execute('DROP TABLE IF EXISTS serials')
+    cur.execute('DROP TABLE IF EXISTS serials;')
     cur.execute("""CREATE TABLE serials (
         id INTEGER PRIMARY KEY,
-        ref TEXT,
-        desc TEXT,
-        start_serial TEXT,
-        end_serial TEXT,
-        date DATE
+        ref VARCHAR(200),
+        description VARCHAR(200),
+        start_serial VARCHAR(30),
+        end_serial VARCHAR(30),
+        date DATETIME
     );""")
-    conn.commit()
+    db.commit()
 
     df = read_excel(filepath, 0)
     serial_counter = 0
-    for index, (line, ref, desc, start_serial, end_serial, date) in df.iterrows():
+    for index, (line, ref, description, start_serial, end_serial, date) in df.iterrows():
         start_serial = normalize_string(start_serial)
         end_serial = normalize_string(end_serial)
-        query = f'INSERT INTO serials VALUES ("{line}", "{ref}", "{desc}", "{start_serial}", "{end_serial}", "{date}");'
-        cur.execute(query)
+        cur.execute('INSERT INTO serials VALUES (%s, %s, %s, %s, %s, %s);',
+                    (line, ref, description, start_serial, end_serial, date))
         # TODO: do some more error handling
         if serial_counter % 10 == 0:
-            conn.commit()
+            db.commit()
         serial_counter += 1
-    conn.commit()
+    db.commit()
 
     # Remove the invalid table if exists, then create the new one
-    cur.execute('DROP TABLE IF EXISTS invalids')
+    cur.execute('DROP TABLE IF EXISTS invalids;')
     cur.execute("""CREATE TABLE invalids(
-                invalid_serial TEXT
+                invalid_serial CHAR(30)
     );""")
-    conn.commit()
+    db.commit()
     invalid_counter = 0
     df = read_excel(filepath, 1)
     for index, (failed_serial, ) in df.iterrows():
         failed_serial = normalize_string(failed_serial)
-        query = f'INSERT INTO invalids VALUES ("{failed_serial}");'
-        cur.execute(query)
+        cur.execute('INSERT INTO invalids VALUES (%s);', (failed_serial, ))
         # TODO: do some more error handling
         if invalid_counter % 10 == 0:
-            conn.commit()
+            db.commit()
         invalid_counter += 1
-    conn.commit()
+    db.commit()
 
-    conn.close()
+    db.close()
 
     return (serial_counter, invalid_counter)
 
 
 def check_serial(serial):
     """ this function will get one serial number and return appropriate answer to that, after consulting the db. """
-    conn = sqlite3.connect(config.DATABASE_FILE_PATH)
+    # Init mysql connection
+    db = MySQLdb.connect(host=config.MYSQL_HOST, user=config.MYSQL_USERNAME,
+                         passwd=config.MYSQL_PASSWORD, db=config.MYSQL_DB_NAME)
+    conn = db.connect(config.DATABASE_FILE_PATH)
     cur = conn.cursor()
 
-    query = f"SELECT * FROM invalids WHERE invalid_serial == '{serial}';"
-    results = cur.execute(query)
+    results = cur.execute(
+        "SELECT * FROM invalids WHERE invalid_serial == %s;", (serial, ))
     if len(results.fetchall()) > 0:
         # TODO: return the string provided by the customer
         return 'This serial is among failed ones'
 
-    query = f"SELECT * FROM serials WHERE start_serial <= '{serial}' AND end_serial >= '{serial}';"
-    results = cur.execute(query)
+    results = cur.execute(
+        "SELECT * FROM serials WHERE start_serial <= %s AND end_serial >= %s;", (serial, serial))
     if len(results.fetchall()) == 1:
         # TODO: return string provided by the customer.
         return 'I found your serial'
