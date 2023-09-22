@@ -2,7 +2,7 @@ import requests
 import re
 import os
 from flask import Flask, jsonify, flash, request, Response, redirect, url_for, abort, render_template
-from flask_login import LoginManager, UserMixin, login_required, login_user, logout_user
+from flask_login import LoginManager, UserMixin, login_required, login_user, logout_user, current_user
 from pandas import read_excel
 from werkzeug.utils import secure_filename
 import sqlite3
@@ -58,28 +58,31 @@ user = User(0)
 def home():
     if request.method == 'POST':
         if 'file' not in request.files:
-            flash('No file part')
+            flash('No file part', 'danger')
             return redirect(request.url)
         file = request.files['file']
         # if user does not select file, browser also
         # submit an empty part without filename
         if file.filename == '':
-            flash('No selected file')
+            flash('No selected file', 'danger')
             return redirect(request.url)
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(file_path)
             rows, failures = import_database_from_excel(file_path)
-            flash(f'Imported {rows} of serials and {failures} rows of failure')
+            flash(
+                f'Imported {rows} of serials and {failures} rows of failure', 'success')
             os.remove(file_path)  # Remove file from file_path
             return redirect('/')
     return render_template('index.html')
 
 
 @app.route('/login', methods=['GET', 'POST'])
-@limiter.limit('10 per minute')
+@limiter.limit('20 per minute')
 def login():
+    if current_user.is_authenticated:
+        return redirect('/')
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
@@ -97,14 +100,14 @@ def login():
 @login_required
 def logout():
     logout_user()
-    flash('Logged out')
+    flash('Logged out', 'success')
     return redirect('/login')
 
 
 # handle login failed
 @app.errorhandler(401)
 def page_not_found(error):
-    flash('Login problem')
+    flash('Login problem', 'danger')
     return redirect('/login')
 
 
@@ -176,7 +179,7 @@ def import_database_from_excel(filepath):
 
     # Remove the serials table if exists, then create the new one
     cur.execute('DROP TABLE IF EXISTS serials')
-    cur.execute("""CREATE TABLE IF NOT EXISTS serials (
+    cur.execute("""CREATE TABLE serials (
         id INTEGER PRIMARY KEY,
         ref TEXT,
         desc TEXT,
@@ -191,8 +194,9 @@ def import_database_from_excel(filepath):
     for index, (line, ref, desc, start_serial, end_serial, date) in df.iterrows():
         start_serial = normalize_string(start_serial)
         end_serial = normalize_string(end_serial)
-        query = f'INSERT INTO serials VALUES ("{line}", "{ref}", "{desc}", "{start_serial}", "{end_serial}", "{date}");'
-        cur.execute(query)
+        cur.execute("INSERT INTO serials VALUES (?, ?, ?, ?, ?, ?)", (
+            line, ref, desc, start_serial, end_serial, date)
+        )
         # TODO: do some more error handling
         if serial_counter % 10 == 0:
             conn.commit()
@@ -201,15 +205,15 @@ def import_database_from_excel(filepath):
 
     # Remove the invalid table if exists, then create the new one
     cur.execute('DROP TABLE IF EXISTS invalids')
-    cur.execute("""CREATE TABLE IF NOT EXISTS invalids(
-                invalid_serial TEXT PRIMARY KEY
+    cur.execute("""CREATE TABLE invalids(
+                invalid_serial TEXT
     );""")
     conn.commit()
     invalid_counter = 0
     df = read_excel(filepath, 1)
     for index, (failed_serial, ) in df.iterrows():
-        query = f'INSERT INTO invalids VALUES ("{failed_serial}");'
-        cur.execute(query)
+        failed_serial = normalize_string(failed_serial)
+        cur.execute('INSERT INTO invalids VALUES (?)', (failed_serial, ))
         # TODO: do some more error handling
         if invalid_counter % 10 == 0:
             conn.commit()
@@ -226,14 +230,14 @@ def check_serial(serial):
     conn = sqlite3.connect(config.DATABASE_FILE_PATH)
     cur = conn.cursor()
 
-    query = f"SELECT * FROM invalids WHERE invalid_serial == '{serial}';"
-    results = cur.execute(query)
+    results = cur.execute(
+        "SELECT * FROM invalids WHERE invalid_serial == ?", (serial, ))
     if len(results.fetchall()) > 0:
         # TODO: return the string provided by the customer
         return 'This serial is among failed ones'
 
-    query = f"SELECT * FROM serials WHERE start_serial <= '{serial}' AND end_serial >= '{serial}';"
-    results = cur.execute(query)
+    results = cur.execute(
+        "SELECT * FROM serials WHERE start_serial <= ? AND end_serial >= ?", (serial, serial))
     if len(results.fetchall()) == 1:
         # TODO: return string provided by the customer.
         return 'I found your serial'

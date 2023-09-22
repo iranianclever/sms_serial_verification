@@ -15,8 +15,10 @@ A project to products sms serial verification
 - [x]  in normalize, convert AB001 TO AB00001 (max len? say 15)
 - [x]  dockerize (alpine? search for uwsgi)
 - [x]  merge pull requests.. check I mean :)
-- [ ]  do proper inserts with INTO
+- [x]  do proper inserts with INTO
 - [x]  templates html
 - [x]  H shafiee
 - [x]  rate limit
 - [x]  add call back token on kavenegar site
+- [x]  we do not normalize the failed serials when importing!
+- [x]  invalids can have duplicates
