@@ -240,6 +240,7 @@ def check_serial(serial):
     results = cur.execute(
         "SELECT * FROM invalids WHERE invalid_serial = %s;", (serial, ))
     if results > 0:
+        db.close()
         # TODO: return the string provided by the customer
         return 'This serial is among failed ones'
 
@@ -249,9 +250,11 @@ def check_serial(serial):
     if results == 1:
         ret = cur.fetchone()
         desc = ret[2]
+        db.close()
         # TODO: return string provided by the customer.
         return 'I found your serial: ', desc
 
+    db.close()
     return 'It was not in the db'
 
 
@@ -271,6 +274,11 @@ def process():
     return jsonify(ret), 200
 
 
+@app.errorhandler(404)
+def page_not_found(n):
+    return render_template('404.html'), 404
+
+
 if __name__ == '__main__':
-    import_database_from_excel('data.xlsx')
-    # app.run('0.0.0.0', 5000, debug=True)
+    # import_database_from_excel('data.xlsx')
+    app.run('0.0.0.0', 5000, debug=True)
