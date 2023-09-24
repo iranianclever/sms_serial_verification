@@ -19,6 +19,7 @@ limiter = Limiter(get_remote_address, app=app, storage_uri="memory://")
 UPLOAD_FOLDER = config.UPLOAD_FOLDER
 ALLOWED_EXTENSIONS = config.ALLOWED_EXTENSIONS
 CALL_BACK_TOKEN = config.CALL_BACK_TOKEN
+
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # flask-login
@@ -34,7 +35,7 @@ def allowed_file(filename):
 
 # config
 app.config.update(
-    DEBUG=True,
+    # DEBUG=True,
     SECRET_KEY=config.SECRET_KEY
 )
 
@@ -186,8 +187,8 @@ def import_database_from_excel(filepath):
         id INTEGER PRIMARY KEY,
         ref VARCHAR(200),
         description VARCHAR(200),
-        start_serial VARCHAR(30),
-        end_serial VARCHAR(30),
+        start_serial CHAR(30),
+        end_serial CHAR(30),
         date DATETIME
     );""")
     db.commit()
@@ -204,6 +205,8 @@ def import_database_from_excel(filepath):
             db.commit()
         serial_counter += 1
     db.commit()
+
+    # Now lets save the invalid serials
 
     # Remove the invalid table if exists, then create the new one
     cur.execute('DROP TABLE IF EXISTS invalids;')
@@ -232,20 +235,22 @@ def check_serial(serial):
     # Init mysql connection
     db = MySQLdb.connect(host=config.MYSQL_HOST, user=config.MYSQL_USERNAME,
                          passwd=config.MYSQL_PASSWORD, db=config.MYSQL_DB_NAME)
-    conn = db.connect(config.DATABASE_FILE_PATH)
-    cur = conn.cursor()
+    cur = db.cursor()
 
     results = cur.execute(
-        "SELECT * FROM invalids WHERE invalid_serial == %s;", (serial, ))
-    if len(results.fetchall()) > 0:
+        "SELECT * FROM invalids WHERE invalid_serial = %s;", (serial, ))
+    if results > 0:
         # TODO: return the string provided by the customer
         return 'This serial is among failed ones'
 
     results = cur.execute(
-        "SELECT * FROM serials WHERE start_serial <= %s AND end_serial >= %s;", (serial, serial))
-    if len(results.fetchall()) == 1:
+        "SELECT * FROM serials WHERE start_serial <= %s and end_serial >= %s;", (serial, serial))
+    print(f'=== {results} ===')
+    if results == 1:
+        ret = cur.fetchone()
+        desc = ret[2]
         # TODO: return string provided by the customer.
-        return 'I found your serial'
+        return 'I found your serial: ', desc
 
     return 'It was not in the db'
 
@@ -267,4 +272,5 @@ def process():
 
 
 if __name__ == '__main__':
-    app.run('0.0.0.0', 5000, debug=True)
+    import_database_from_excel('data.xlsx')
+    # app.run('0.0.0.0', 5000, debug=True)

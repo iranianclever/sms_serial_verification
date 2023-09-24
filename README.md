@@ -9,7 +9,7 @@ A project to products sms serial verification
 - [x]  some health check url
 - [x]  there is problem with JJ1000000 and JJ100
 - [x]  create requirements.txt (pip freeze)
-- [ ]  the insert will fail if there is a ' or " in excel file
+- [x]  the insert will fail if there is a ' or " in excel file
 - [x]  another 10 % problem :D
 - [x]  refactor name str in normalize function
 - [x]  in normalize, convert AB001 TO AB00001 (max len? say 15)
@@ -22,4 +22,6 @@ A project to products sms serial verification
 - [x]  add call back token on kavenegar site
 - [x]  we do not normalize the failed serials when importing!
 - [x]  invalids can have duplicates
-- [ ]  migrate to mysql
+- [x]  migrate to mysql
+- [ ]  check email from altech
+- [ ]  add altech logo based on the email
