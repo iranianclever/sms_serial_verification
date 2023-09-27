@@ -1,6 +1,6 @@
-import requests
-import re
 import os
+import re
+import requests
 from flask import Flask, jsonify, flash, request, Response, redirect, url_for, abort, render_template
 from flask_login import LoginManager, UserMixin, login_required, login_user, logout_user, current_user
 from pandas import read_excel
@@ -246,8 +246,10 @@ def check_serial(serial):
 
     results = cur.execute(
         "SELECT * FROM serials WHERE start_serial <= %s and end_serial >= %s;", (serial, serial))
-    print(f'=== {results} ===')
-    if results == 1:
+    if results > 1:
+        db.close()
+        return 'I found your serial'  # TODO: fix with proper message
+    elif results == 1:
         ret = cur.fetchone()
         desc = ret[2]
         db.close()
@@ -275,7 +277,7 @@ def process():
 
 
 @app.errorhandler(404)
-def page_not_found(n):
+def page_not_found(e):
     return render_template('404.html'), 404
 
 

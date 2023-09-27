@@ -23,13 +23,12 @@ A project to products sms serial verification
 - [x]  we do not normalize the failed serials when importing!
 - [x]  invalids can have duplicates
 - [x]  migrate to mysql
-- [ ]  check email from altech
-- [ ]  if we have 2 matches on serials, return a general OK message
+- [x]  if we have 2 matches on serials, return a general OK message
 - [x]  add altech logo based on the email
 - [x]  close db connection in check_serial
 - [ ]  count the failed insertions in db
-- [ ]  regenerate requirements.txt with MySQLdb
+- [x]  regenerate requirements.txt with MySQLdb
 - [ ]  proper texts are provided in Downloads/sms_reply_
 - [ ]  is it possible to check a serial from the gui?
-- [ ]  dummy message for end to end test via SMS
+- [x]  dummy message for end to end test via SMS
 - [ ]  log all incomming sms
