@@ -77,7 +77,22 @@ def home():
                 f'Imported {rows} of serials and {failures} rows of failure', 'success')
             os.remove(file_path)  # Remove file from file_path
             return redirect('/')
-    return render_template('index.html')
+
+    # Init mysql connection
+    db = MySQLdb.connect(host=config.MYSQL_HOST, user=config.MYSQL_USERNAME,
+                         passwd=config.MYSQL_PASSWORD, db=config.MYSQL_DB_NAME)
+
+    cur = db.cursor()
+    cur.execute("SELECT * FROM PROCESSED_SMS ORDER BY date DESC LIMIT 5000;")
+    all_smss = cur.fetchall()
+    smss = []
+    for sms in all_smss:
+        sender, message, answer, date = sms
+        smss.append({'sender': sender, 'message': message,
+                    'answer': answer, 'date': date})
+        print(smss)
+
+    return render_template('index.html', data={'smss': smss})
 
 
 @app.route('/login', methods=['GET', 'POST'])
