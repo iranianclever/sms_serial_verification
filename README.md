@@ -5,7 +5,7 @@ You should rename the `config.py.sample` to `config.py` and do proper changes.
 ## DB
 db config are in config.py, but you also need to add this table to the database manually:
 
-    CREATE TABLE PROCESSED_SMS (sender CHAR(20), message VARCHAR(400), answer VARCHAR(400), date DATETIME);
+    CREATE TABLE PROCESSED_SMS (status ENUM('OK', 'FAILURE', 'DOUBLE', 'NOT-FOUND'), sender CHAR(20), message VARCHAR(400), answer VARCHAR(400), date DATETIME, INDEX(date, status));
 
 
 ## TODO
@@ -32,7 +32,7 @@ db config are in config.py, but you also need to add this table to the database 
 - [x]  if we have 2 matches on serials, return a general OK message
 - [x]  add altech logo based on the email
 - [x]  close db connection in check_serial
-- [ ]  count the failed insertions in db
+- [x]  count the failed insertions in db
 - [x]  regenerate requirements.txt with MySQLdb
 - [ ]  proper texts are provided in Downloads/sms_reply_
 - [x]  is it possible to check a serial from the gui?
@@ -40,5 +40,6 @@ db config are in config.py, but you also need to add this table to the database 
 - [x]  log all incomming sms
 - [ ]  Atomic problem when I'm committing every 10 inserts
 - [x]  show smss at the bottom of the Dashboard
-- [ ]  define indexes on mysql
-- [ ]  add some number to the cards
+- [x]  define indexes on mysql
+- [ ]  trim too long sms input
+- [x]  add some number to the cards

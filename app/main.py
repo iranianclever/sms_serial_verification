@@ -52,7 +52,18 @@ class User(UserMixin):
 
 user = User(0)
 
-# some protected url
+
+def init_processed_sms_table_in_db():
+    ''' This function is important for holder sms status and request to server for products or other. '''
+    # Init mysql connection
+    db = MySQLdb.connect(host=config.MYSQL_HOST, user=config.MYSQL_USERNAME,
+                         passwd=config.MYSQL_PASSWORD, db=config.MYSQL_DB_NAME)
+
+    cur = db.cursor()
+
+    cur.execute("CREATE TABLE IF NOT EXISTS PROCESSED_SMS (status ENUM('OK', 'FAILURE', 'DOUBLE', 'NOT-FOUND'), sender CHAR(20), message VARCHAR(400), answer VARCHAR(400), date DATETIME, INDEX(date, status));")
+    db.commit()
+    db.close()
 
 
 @app.route('/', methods=['GET', 'POST'])
@@ -78,21 +89,38 @@ def home():
             os.remove(file_path)  # Remove file from file_path
             return redirect('/')
 
+    # Init processed_sms table in database
+    init_processed_sms_table_in_db()
+
     # Init mysql connection
     db = MySQLdb.connect(host=config.MYSQL_HOST, user=config.MYSQL_USERNAME,
                          passwd=config.MYSQL_PASSWORD, db=config.MYSQL_DB_NAME)
 
     cur = db.cursor()
+
+    # Get last 5000 smss
     cur.execute("SELECT * FROM PROCESSED_SMS ORDER BY date DESC LIMIT 5000;")
     all_smss = cur.fetchall()
     smss = []
     for sms in all_smss:
-        sender, message, answer, date = sms
-        smss.append({'sender': sender, 'message': message,
+        status, sender, message, answer, date = sms
+        smss.append({'status': status, 'sender': sender, 'message': message,
                     'answer': answer, 'date': date})
-        print(smss)
 
-    return render_template('index.html', data={'smss': smss})
+    # Collect some stats for the GUI
+    cur.execute("SELECT count(*) FROM PROCESSED_SMS WHERE status = 'OK';")
+    num_ok = cur.fetchone()[0]
+
+    cur.execute("SELECT count(*) FROM PROCESSED_SMS WHERE status = 'FAILURE';")
+    num_failure = cur.fetchone()[0]
+
+    cur.execute("SELECT count(*) FROM PROCESSED_SMS WHERE status = 'DOUBLE';")
+    num_double = cur.fetchone()[0]
+
+    cur.execute("SELECT count(*) FROM PROCESSED_SMS WHERE status = 'NOT-FOUND';")
+    num_notfound = cur.fetchone()[0]
+
+    return render_template('index.html', data={'smss': smss, 'ok': num_ok, 'failure': num_failure, 'double': num_double, 'notfound': num_notfound})
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -116,8 +144,8 @@ def login():
 @login_required
 def check_one_serial():
     serial_to_check = request.form['serial']
-    answer = check_serial(normalize_string(serial_to_check))
-    flash(answer, 'info')
+    status, answer = check_serial(normalize_string(serial_to_check))
+    flash(f'{status} - {answer}', 'info')
 
     return redirect('/')
 
@@ -214,7 +242,8 @@ def import_database_from_excel(filepath):
         description VARCHAR(200),
         start_serial CHAR(30),
         end_serial CHAR(30),
-        date DATETIME
+        date DATETIME,
+        INDEX (start_serial, end_serial)
     );""")
     db.commit()
 
@@ -236,7 +265,8 @@ def import_database_from_excel(filepath):
     # Remove the invalid table if exists, then create the new one
     cur.execute('DROP TABLE IF EXISTS invalids;')
     cur.execute("""CREATE TABLE invalids(
-                invalid_serial CHAR(30)
+                invalid_serial CHAR(30),
+                INDEX (invalid_serial)
     );""")
     db.commit()
     invalid_counter = 0
@@ -267,22 +297,22 @@ def check_serial(serial):
     if results > 0:
         db.close()
         # TODO: return the string provided by the customer
-        return 'This serial is among failed ones'
+        return 'FAILURE', 'This serial is among failed ones'
 
     results = cur.execute(
         "SELECT * FROM serials WHERE start_serial <= %s and end_serial >= %s;", (serial, serial))
     if results > 1:
         db.close()
-        return 'I found your serial'  # TODO: fix with proper message
+        return 'DOUBLE', 'I found your serial'  # TODO: fix with proper message
     elif results == 1:
         ret = cur.fetchone()
         desc = ret[2]
         db.close()
         # TODO: return string provided by the customer.
-        return 'I found your serial: ' + desc
+        return 'OK', 'I found your serial: ' + desc
 
     db.close()
-    return 'It was not in the db'
+    return 'NOT-FOUND', 'It was not in the db'
 
 
 @app.route(f'/v1/{CALL_BACK_TOKEN}/process', methods=['POST'])
@@ -294,7 +324,7 @@ def process():
     message = normalize_string(data['message'])
     print(f'Received: {message} from {sender}')
 
-    answer = check_serial(message)
+    status, answer = check_serial(message)
 
     # Init mysql connection
     db = MySQLdb.connect(host=config.MYSQL_HOST, user=config.MYSQL_USERNAME,
@@ -303,8 +333,8 @@ def process():
     cur = db.cursor()
 
     now = time.strftime('%Y-%m-%d %H:%M:%S')
-    cur.execute("INSERT INTO PROCESSED_SMS (sender, message, answer, date) VALUES (%s, %s, %s, %s)",
-                (sender, message, answer, now))
+    cur.execute("INSERT INTO PROCESSED_SMS (status, sender, message, answer, date) VALUES (%s, %s, %s, %s, %s)",
+                (status, sender, message, answer, now))
     db.commit()
     db.close()
 
@@ -320,4 +350,5 @@ def page_not_found(e):
 
 if __name__ == '__main__':
     # import_database_from_excel('data.xlsx')
+    init_processed_sms_table_in_db()
     app.run('0.0.0.0', 5000, debug=True)
