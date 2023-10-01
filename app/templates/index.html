@@ -119,16 +119,7 @@
                         <!-- <ol class="breadcrumb mb-4">
                             <li class="breadcrumb-item active">Dashboard</li>
                         </ol> -->
-                        {% with messages = get_flashed_messages(with_categories=true) %}
-                        {% if messages %}
-                            {% for category, message in messages %}
-                            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                                {{ message }}
-                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                            </div>
-                            {% endfor %}
-                        {% endif %}
-                        {% endwith %}
+                        {% include 'alert.html' %}
                         <div class="row">
                             <div class="col-xl-3 col-md-6">
                                 <div class="card bg-success text-white mb-4">
@@ -266,7 +257,7 @@
                 <footer class="py-4 bg-light mt-auto">
                     <div class="container-fluid px-4">
                         <div class="d-flex align-items-center justify-content-between small">
-                            <div class="text-muted">Copyright &copy; Altech 2023</div>
+                            {% include 'copyleft.html' %}
                         </div>
                     </div>
                 </footer>

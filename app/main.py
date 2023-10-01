@@ -17,6 +17,7 @@ app = Flask(__name__)
 
 limiter = Limiter(get_remote_address, app=app, storage_uri="memory://")
 
+MAX_FLASH = 10
 UPLOAD_FOLDER = config.UPLOAD_FOLDER
 ALLOWED_EXTENSIONS = config.ALLOWED_EXTENSIONS
 CALL_BACK_TOKEN = config.CALL_BACK_TOKEN
@@ -27,6 +28,7 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
+login_manager.login_message_category = 'danger'
 
 
 def allowed_file(filename):
@@ -56,8 +58,7 @@ user = User(0)
 def init_processed_sms_table_in_db():
     ''' This function is important for holder sms status and request to server for products or other. '''
     # Init mysql connection
-    db = MySQLdb.connect(host=config.MYSQL_HOST, user=config.MYSQL_USERNAME,
-                         passwd=config.MYSQL_PASSWORD, db=config.MYSQL_DB_NAME)
+    db = get_database_connection()
 
     cur = db.cursor()
 
@@ -93,8 +94,7 @@ def home():
     init_processed_sms_table_in_db()
 
     # Init mysql connection
-    db = MySQLdb.connect(host=config.MYSQL_HOST, user=config.MYSQL_USERNAME,
-                         passwd=config.MYSQL_PASSWORD, db=config.MYSQL_DB_NAME)
+    db = get_database_connection()
 
     cur = db.cursor()
 
@@ -121,6 +121,11 @@ def home():
     num_notfound = cur.fetchone()[0]
 
     return render_template('index.html', data={'smss': smss, 'ok': num_ok, 'failure': num_failure, 'double': num_double, 'notfound': num_notfound})
+
+
+def get_database_connection():
+    return MySQLdb.connect(host=config.MYSQL_HOST, user=config.MYSQL_USERNAME,
+                           passwd=config.MYSQL_PASSWORD, db=config.MYSQL_DB_NAME)
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -228,57 +233,75 @@ def import_database_from_excel(filepath):
     # TODO: make sure that the data is imported correctly, we need to backup the old one
 
     # Init mysql connection
-    db = MySQLdb.connect(host=config.MYSQL_HOST, user=config.MYSQL_USERNAME,
-                         passwd=config.MYSQL_PASSWORD, db=config.MYSQL_DB_NAME)
+    db = get_database_connection()
 
     # Our mysql database will contain two tables: serials and invalids
     cur = db.cursor()
 
-    # Remove the serials table if exists, then create the new one
-    cur.execute('DROP TABLE IF EXISTS serials;')
-    cur.execute("""CREATE TABLE serials (
-        id INTEGER PRIMARY KEY,
-        ref VARCHAR(200),
-        description VARCHAR(200),
-        start_serial CHAR(30),
-        end_serial CHAR(30),
-        date DATETIME,
-        INDEX (start_serial, end_serial)
-    );""")
-    db.commit()
+    try:
+        # Remove the serials table if exists, then create the new one
+        cur.execute('DROP TABLE IF EXISTS serials;')
+        cur.execute("""CREATE TABLE serials (
+            id INTEGER PRIMARY KEY,
+            ref VARCHAR(200),
+            description VARCHAR(200),
+            start_serial CHAR(30),
+            end_serial CHAR(30),
+            date DATETIME,
+            INDEX (start_serial, end_serial)
+        );""")
+        db.commit()
+    except:
+        flash('Problem dropping and creating new table in database', 'danger')
 
     df = read_excel(filepath, 0)
-    serial_counter = 0
+    serial_counter = 1
+    total_flashes = 0
     for index, (line, ref, description, start_serial, end_serial, date) in df.iterrows():
-        start_serial = normalize_string(start_serial)
-        end_serial = normalize_string(end_serial)
-        cur.execute('INSERT INTO serials VALUES (%s, %s, %s, %s, %s, %s);',
-                    (line, ref, description, start_serial, end_serial, date))
-        # TODO: do some more error handling
-        if serial_counter % 10 == 0:
-            db.commit()
         serial_counter += 1
-    db.commit()
+        try:
+            start_serial = normalize_string(start_serial)
+            end_serial = normalize_string(end_serial)
+            cur.execute('INSERT INTO serials VALUES (%s, %s, %s, %s, %s, %s);',
+                        (line, ref, description, start_serial, end_serial, date))
+            db.commit()
+        except:
+            total_flashes += 1
+            if total_flashes < MAX_FLASH:
+                flash(
+                    f'Error inserting line {serial_counter} from serials sheet SERIALS', 'danger')
+            else:
+                flash(f'Too many errors!', 'danger')
 
     # Now lets save the invalid serials
 
-    # Remove the invalid table if exists, then create the new one
-    cur.execute('DROP TABLE IF EXISTS invalids;')
-    cur.execute("""CREATE TABLE invalids(
-                invalid_serial CHAR(30),
-                INDEX (invalid_serial)
-    );""")
-    db.commit()
-    invalid_counter = 0
+    try:
+        # Remove the invalid table if exists, then create the new one
+        cur.execute('DROP TABLE IF EXISTS invalids;')
+        cur.execute("""CREATE TABLE invalids(
+                    invalid_serial CHAR(30),
+                    INDEX (invalid_serial)
+        );""")
+        db.commit()
+    except:
+        flash('Error dropping and creating INVALIDS tables', 'danger')
+
+    invalid_counter = 1
+    total_flashes = 0
     df = read_excel(filepath, 1)
     for index, (failed_serial, ) in df.iterrows():
-        failed_serial = normalize_string(failed_serial)
-        cur.execute('INSERT INTO invalids VALUES (%s);', (failed_serial, ))
-        # TODO: do some more error handling
-        if invalid_counter % 10 == 0:
-            db.commit()
         invalid_counter += 1
-    db.commit()
+        try:
+            failed_serial = normalize_string(failed_serial)
+            cur.execute('INSERT INTO invalids VALUES (%s);', (failed_serial, ))
+            db.commit()
+        except:
+            total_flashes += 1
+            if total_flashes < MAX_FLASH:
+                flash(
+                    f'Error inserting line {invalid_counter} from series sheet INVALIDS', 'danger')
+            else:
+                flash(f'Too many errors!', 'danger')
 
     db.close()
 
@@ -288,8 +311,7 @@ def import_database_from_excel(filepath):
 def check_serial(serial):
     """ this function will get one serial number and return appropriate answer to that, after consulting the db. """
     # Init mysql connection
-    db = MySQLdb.connect(host=config.MYSQL_HOST, user=config.MYSQL_USERNAME,
-                         passwd=config.MYSQL_PASSWORD, db=config.MYSQL_DB_NAME)
+    db = get_database_connection()
     cur = db.cursor()
 
     results = cur.execute(
@@ -327,8 +349,7 @@ def process():
     status, answer = check_serial(message)
 
     # Init mysql connection
-    db = MySQLdb.connect(host=config.MYSQL_HOST, user=config.MYSQL_USERNAME,
-                         passwd=config.MYSQL_PASSWORD, db=config.MYSQL_DB_NAME)
+    db = get_database_connection()
 
     cur = db.cursor()
 

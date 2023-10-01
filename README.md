@@ -1,12 +1,17 @@
 # sms_serial_verification
 A project to products sms serial verification
 
-You should rename the `config.py.sample` to `config.py` and do proper changes.
-## DB
-db config are in config.py, but you also need to add this table to the database manually:
+### How to run
+1. Install python3, pip3, virtualenv, MySQL in your system.
+2. Clone the project `https://github.com/iranianclever/sms_serial_verification && cd sms_serial_verification`
+3. Rename the `config.py.sample` to `config.py` and do proper changes.
+4. Database configs are in config.py, but you also need to add this table to the database manually: `CREATE TABLE PROCESSED_SMS (status ENUM('OK', 'FAILURE', 'DOUBLE', 'NOT-FOUND'), sender CHAR(20), message VARCHAR(400), answer VARCHAR(400), date DATETIME, INDEX(date, status));`
+5. Create a virtualenv using `virtualenv -p python3 build`
+6. Connect to virtualenv using `source build/bin/active`
+7. Install packages using `pip3 install -r requirements.txt`
+8. Now environment is ready run it using `python3 app/main.py`
 
-    CREATE TABLE PROCESSED_SMS (status ENUM('OK', 'FAILURE', 'DOUBLE', 'NOT-FOUND'), sender CHAR(20), message VARCHAR(400), answer VARCHAR(400), date DATETIME, INDEX(date, status));
-
+### Or you can use Dockerfile to deploy it to docker
 
 ## TODO
 - [x]  Farhad seifi https://ngrok.com
@@ -23,7 +28,6 @@ db config are in config.py, but you also need to add this table to the database 
 - [x]  merge pull requests.. check I mean :)
 - [x]  do proper inserts with INTO
 - [x]  templates html
-- [x]  H shafiee
 - [x]  rate limit
 - [x]  add call back token on kavenegar site
 - [x]  we do not normalize the failed serials when importing!
@@ -38,8 +42,9 @@ db config are in config.py, but you also need to add this table to the database 
 - [x]  is it possible to check a serial from the gui?
 - [x]  dummy message for end to end test via SMS
 - [x]  log all incomming sms
-- [ ]  Atomic problem when I'm committing every 10 inserts
+- [x]  Atomic problem when I'm committing every 10 inserts
 - [x]  show smss at the bottom of the Dashboard
 - [x]  define indexes on mysql
-- [ ]  trim too long sms input
+- [x]  trim too long sms input
 - [x]  add some number to the cards
+- [ ]  fix query in README
