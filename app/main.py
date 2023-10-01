@@ -15,7 +15,7 @@ from flask_limiter.util import get_remote_address
 # Sample flask object
 app = Flask(__name__)
 
-limiter = Limiter(get_remote_address, app=app, storage_uri="memory://")
+limiter = Limiter(app, key_func=get_remote_address, storage_uri="memory://")
 
 MAX_FLASH = 10
 UPLOAD_FOLDER = config.UPLOAD_FOLDER
@@ -32,18 +32,16 @@ login_manager.login_message_category = 'danger'
 
 
 def allowed_file(filename):
-    return '.' in filename and \
-        filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    """ Check the extension of the passed filename to be in the allowed extensions """
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
 # config
-app.config.update(
-    # DEBUG=True,
-    SECRET_KEY=config.SECRET_KEY
-)
+app.config.update(SECRET_KEY=config.SECRET_KEY)
 
 
 class User(UserMixin):
+    """ A minimal and singleton user class used only for administrative tasks """
 
     def __init__(self, id):
         self.id = id
@@ -70,6 +68,7 @@ def init_processed_sms_table_in_db():
 @app.route('/', methods=['GET', 'POST'])
 @login_required
 def home():
+    """ Creates database if method is post otherwise shows the homepage with some stats see import_database_from_excel() for more details on database creation """
     if request.method == 'POST':
         if 'file' not in request.files:
             flash('No file part', 'danger')
@@ -98,7 +97,7 @@ def home():
 
     cur = db.cursor()
 
-    # Get last 5000 smss
+    # Get last 5000 sms
     cur.execute("SELECT * FROM PROCESSED_SMS ORDER BY date DESC LIMIT 5000;")
     all_smss = cur.fetchall()
     smss = []
@@ -131,6 +130,8 @@ def get_database_connection():
 @app.route('/login', methods=['GET', 'POST'])
 @limiter.limit('20 per minute')
 def login():
+    """ User login: only for admin user (System has no other user than admin)
+    Note: there is a 10 tries per minute limitation to admin login to avoid minimize password factoring """
     if current_user.is_authenticated:
         return redirect('/')
     if request.method == 'POST':
@@ -148,6 +149,7 @@ def login():
 @app.route('/check_one_serial', methods=['POST'])
 @login_required
 def check_one_serial():
+    """ To check whether a serail number is valid or not """
     serial_to_check = request.form['serial']
     status, answer = check_serial(normalize_string(serial_to_check))
     flash(f'{status} - {answer}', 'info')
@@ -155,10 +157,10 @@ def check_one_serial():
     return redirect('/')
 
 
-# somewhere to logout
 @app.route('/logout')
 @login_required
 def logout():
+    """ Logs out the admin user """
     logout_user()
     flash('Logged out', 'success')
     return redirect('/login')
@@ -167,6 +169,7 @@ def logout():
 # handle login failed
 @app.errorhandler(401)
 def page_not_found(error):
+    """ Handling login failures """
     flash('Login problem', 'danger')
     return redirect('/login')
 
