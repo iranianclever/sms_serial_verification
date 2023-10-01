@@ -96,6 +96,16 @@ def login():
         return render_template('login.html')
 
 
+@app.route('/check_one_serial', methods=['POST'])
+@login_required
+def check_one_serial():
+    serial_to_check = request.form['serial']
+    answer = check_serial(normalize_string(serial_to_check))
+    flash(answer, 'info')
+
+    return redirect('/')
+
+
 # somewhere to logout
 @app.route('/logout')
 @login_required
@@ -254,7 +264,7 @@ def check_serial(serial):
         desc = ret[2]
         db.close()
         # TODO: return string provided by the customer.
-        return 'I found your serial: ', desc
+        return 'I found your serial: ' + desc
 
     db.close()
     return 'It was not in the db'
