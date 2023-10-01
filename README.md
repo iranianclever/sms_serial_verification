@@ -1,6 +1,13 @@
 # sms_serial_verification
 A project to products sms serial verification
 
+You should rename the `config.py.sample` to `config.py` and do proper changes.
+## DB
+db config are in config.py, but you also need to add this table to the database manually:
+
+    CREATE TABLE PROCESSED_SMS (sender CHAR(20), message VARCHAR(400), answer VARCHAR(400), date DATETIME);
+
+
 ## TODO
 - [x]  Farhad seifi https://ngrok.com
 - [x]  add db path to config.py.sample
@@ -30,6 +37,6 @@ A project to products sms serial verification
 - [ ]  proper texts are provided in Downloads/sms_reply_
 - [x]  is it possible to check a serial from the gui?
 - [x]  dummy message for end to end test via SMS
-- [ ]  log all incomming sms
+- [x]  log all incomming sms
 - [ ]  Atomic problem when I'm committing every 10 inserts
 - [ ]  show smss at the bottom of the Dashboard

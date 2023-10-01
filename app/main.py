@@ -1,5 +1,6 @@
 import os
 import re
+import time
 import requests
 from flask import Flask, jsonify, flash, request, Response, redirect, url_for, abort, render_template
 from flask_login import LoginManager, UserMixin, login_required, login_user, logout_user, current_user
@@ -181,8 +182,7 @@ def import_database_from_excel(filepath):
     """
     # df contains lookup data in the form of
 
-    # TODO: make sure that the data is imported correctly, we nned to backup the old one
-    # TODO: do some normalization
+    # TODO: make sure that the data is imported correctly, we need to backup the old one
 
     # Init mysql connection
     db = MySQLdb.connect(host=config.MYSQL_HOST, user=config.MYSQL_USERNAME,
@@ -277,9 +277,21 @@ def process():
     data = request.form
     sender = data['from']
     message = normalize_string(data['message'])
-    print(f'Received: {message} from {sender}')  # TODO: logging
+    print(f'Received: {message} from {sender}')
 
     answer = check_serial(message)
+
+    # Init mysql connection
+    db = MySQLdb.connect(host=config.MYSQL_HOST, user=config.MYSQL_USERNAME,
+                         passwd=config.MYSQL_PASSWORD, db=config.MYSQL_DB_NAME)
+
+    cur = db.cursor()
+
+    now = time.strftime('%Y-%m-%d %H:%M:%S')
+    cur.execute("INSERT INTO PROCESSED_SMS (sender, message, answer, date) VALUES (%s, %s, %s, %s)",
+                (sender, message, answer, now))
+    db.commit()
+    db.close()
 
     send_sms(sender, answer)
     ret = {'message': 'processed!'}
