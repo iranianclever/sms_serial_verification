@@ -34,11 +34,11 @@ A project to products sms serial verification
 - [x]  invalids can have duplicates
 - [x]  migrate to mysql
 - [x]  if we have 2 matches on serials, return a general OK message
-- [x]  add altech logo based on the email
+- [x]  add IranTheme logo based on the email
 - [x]  close db connection in check_serial
 - [x]  count the failed insertions in db
 - [x]  regenerate requirements.txt with MySQLdb
-- [ ]  proper texts are provided in Downloads/sms_reply_
+- [x]  proper texts are provided in Downloads/sms_reply_
 - [x]  is it possible to check a serial from the gui?
 - [x]  dummy message for end to end test via SMS
 - [x]  log all incomming sms
@@ -47,4 +47,3 @@ A project to products sms serial verification
 - [x]  define indexes on mysql
 - [x]  trim too long sms input
 - [x]  add some number to the cards
-- [ ]  fix query in README

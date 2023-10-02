@@ -1,6 +1,7 @@
 import os
 import re
 import time
+import datetime
 import requests
 from flask import Flask, jsonify, flash, request, Response, redirect, url_for, abort, render_template
 from flask_login import LoginManager, UserMixin, login_required, login_user, logout_user, current_user
@@ -128,7 +129,7 @@ def home():
 
 def get_database_connection():
     return MySQLdb.connect(host=config.MYSQL_HOST, user=config.MYSQL_USERNAME,
-                           passwd=config.MYSQL_PASSWORD, db=config.MYSQL_DB_NAME)
+                           passwd=config.MYSQL_PASSWORD, db=config.MYSQL_DB_NAME, charset='utf8')
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -155,7 +156,7 @@ def login():
 def check_one_serial():
     """ To check whether a serail number is valid or not """
     serial_to_check = request.form['serial']
-    status, answer = check_serial(normalize_string(serial_to_check))
+    status, answer = check_serial(serial_to_check)
     flash(f'{status} - {answer}', 'info')
 
     return redirect('/')
@@ -178,10 +179,10 @@ def page_failed(error):
     return redirect('/login')
 
 
-# # callback to reload the user object
-# @login_manager.user_loader
-# def load_user(user_id):
-#     return User(user_id)
+# callback to reload the user object
+@login_manager.user_loader
+def load_user(user_id):
+    return User(user_id)
 
 
 @app.route('/v1/ok')
@@ -236,9 +237,7 @@ def import_database_from_excel(filepath):
 
     return two integers: (number of serial rows, number of invalid rows)
     """
-    # df contains lookup data in the form of
-
-    # TODO: make sure that the data is imported correctly, we need to backup the old one
+    # data_fields contains lookup data in the form of
 
     # Init mysql connection
     db = get_database_connection()
@@ -262,22 +261,24 @@ def import_database_from_excel(filepath):
     except:
         flash('Problem dropping and creating new table in database', 'danger')
 
-    df = read_excel(filepath, 0)
+    data_fields = read_excel(filepath, 0)
     serial_counter = 1
+    line_number = 1
     total_flashes = 0
-    for index, (line, ref, description, start_serial, end_serial, date) in df.iterrows():
-        serial_counter += 1
+    for index, (line, ref, description, start_serial, end_serial, date) in data_fields.iterrows():
+        line_number += 1
         try:
             start_serial = normalize_string(start_serial)
             end_serial = normalize_string(end_serial)
             cur.execute('INSERT INTO serials VALUES (%s, %s, %s, %s, %s, %s);',
                         (line, ref, description, start_serial, end_serial, date))
             db.commit()
+            serial_counter += 1
         except:
             total_flashes += 1
             if total_flashes < MAX_FLASH:
                 flash(
-                    f'Error inserting line {serial_counter} from serials sheet SERIALS', 'danger')
+                    f'Error inserting line {line_number} from serials sheet SERIALS', 'danger')
             else:
                 flash(f'Too many errors!', 'danger')
 
@@ -296,18 +297,20 @@ def import_database_from_excel(filepath):
 
     invalid_counter = 1
     total_flashes = 0
-    df = read_excel(filepath, 1)
-    for index, (failed_serial, ) in df.iterrows():
-        invalid_counter += 1
+    line_number = 1
+    data_fields = read_excel(filepath, 1)
+    for index, (failed_serial, ) in data_fields.iterrows():
+        line_number += 1
         try:
             failed_serial = normalize_string(failed_serial)
             cur.execute('INSERT INTO invalids VALUES (%s);', (failed_serial, ))
             db.commit()
+            invalid_counter += 1
         except:
             total_flashes += 1
             if total_flashes < MAX_FLASH:
                 flash(
-                    f'Error inserting line {invalid_counter} from series sheet INVALIDS', 'danger')
+                    f'Error inserting line {line_number} from series sheet INVALIDS', 'danger')
             else:
                 flash(f'Too many errors!', 'danger')
 
@@ -318,31 +321,65 @@ def import_database_from_excel(filepath):
 
 def check_serial(serial):
     """ this function will get one serial number and return appropriate answer to that, after consulting the db. """
+
+    original_serial = serial
+    serial = normalize_string(serial)
+
     # Init mysql connection
     db = get_database_connection()
     cur = db.cursor()
 
+    # Get result invalid serial from db
     results = cur.execute(
         "SELECT * FROM invalids WHERE invalid_serial = %s;", (serial, ))
+    # Check results invalid
     if results > 0:
         db.close()
-        # TODO: return the string provided by the customer
-        return 'FAILURE', 'This serial is among failed ones'
+        answer = f"""{original_serial}
+این شماره هولوگرام یافت نشد. لطفا دوباره سعی کنید و یا با واحد پشتیبانی تماس حاصل فرمایید.
+ساختار صحیح شماره هولوگرام به صورت دو حرف انگلیسی و ۷ یا ۸ رقم در دنباله آن می باشد. مثال FA1234567
+شماره تماس با بخش پشتیبانی فروش شرکت ایران تم
+۰۲۱-۰۰۰۰۰۰۰۰"""
+        return 'FAILURE', answer
 
+    # Get result serial valid from db
     results = cur.execute(
         "SELECT * FROM serials WHERE start_serial <= %s and end_serial >= %s;", (serial, serial))
+    # Double status result
     if results > 1:
         db.close()
-        return 'DOUBLE', 'I found your serial'  # TODO: fix with proper message
+        answer = f"""{original_serial}
+این شماره هولوگرام مورد تایید است.
+برای اطلاعات بیشتر از نوع محصول با بخش پشتیبانی فروش شرکت ایران تم تماس حاصل فرمایید.
+۰۲۱-۰۰۰۰۰۰۰۰"""
+        return 'DOUBLE', answer
+    # Check results valid individual
     elif results == 1:
         ret = cur.fetchone()
         desc = ret[2]
+        ref_number = ret[1]
+        date = ret[5].date()
         db.close()
-        # TODO: return string provided by the customer.
-        return 'OK', 'I found your serial: ' + desc
+        answer = f"""{original_serial}
+{ref_number}
+{desc}
+Hologram date: {date}
+Genuine product of Schneider Electric
+شماره تماس با بخش پشتیبانی فروش شرکت ایران تم
+۰۲۱-۰۰۰۰۰۰۰۰
+"""
+        return 'OK', answer
 
     db.close()
-    return 'NOT-FOUND', 'It was not in the db'
+
+    # Return not found status if results not found any serials
+    answer = f"""{original_serial}
+این شماره هولوگرام یافت نشد. لطفا دوباره سعی کنید و یا با واحد پشتیبانی تماس حاصل فرمایید.
+ساختار صحیح شماره هولوگرام بصورت دو حرف انگلیسی و ۷ یا ۸ رقم در دنباله آن می باشد. مثال: 
+FA1234567
+شماره تماس با بخش پشتیبانی فروش شرکت ایران تم:
+۰۲۱-۰۰۰۰۰۰۰۰"""
+    return 'NOT-FOUND', answer
 
 
 @app.route(f'/v1/{CALL_BACK_TOKEN}/process', methods=['POST'])
@@ -352,8 +389,7 @@ def process():
     # Note: You need to call back token to send request (post) to process function
     data = request.form
     sender = data['from']
-    message = normalize_string(data['message'])
-    print(f'Received: {message} from {sender}')
+    message = data['message']
 
     status, answer = check_serial(message)
 
