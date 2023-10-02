@@ -15,8 +15,11 @@ from flask_limiter.util import get_remote_address
 # Sample flask object
 app = Flask(__name__)
 
-limiter = Limiter(app, key_func=get_remote_address, storage_uri="memory://")
+# Create limiter to prevent brute force
+limiter = Limiter(app=app, key_func=get_remote_address,
+                  storage_uri="memory://")
 
+# Constant configs
 MAX_FLASH = 10
 UPLOAD_FOLDER = config.UPLOAD_FOLDER
 ALLOWED_EXTENSIONS = config.ALLOWED_EXTENSIONS
@@ -36,7 +39,7 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
-# config
+# A secure key to protect app
 app.config.update(SECRET_KEY=config.SECRET_KEY)
 
 
@@ -44,6 +47,7 @@ class User(UserMixin):
     """ A minimal and singleton user class used only for administrative tasks """
 
     def __init__(self, id):
+        """ Constructor initialize user id """
         self.id = id
 
     def __repr__(self):
@@ -54,7 +58,7 @@ user = User(0)
 
 
 def init_processed_sms_table_in_db():
-    ''' This function is important for holder sms status and request to server for products or other. '''
+    """ This function is important for holder sms status and request to server for products or other. """
     # Init mysql connection
     db = get_database_connection()
 
@@ -168,20 +172,21 @@ def logout():
 
 # handle login failed
 @app.errorhandler(401)
-def page_not_found(error):
+def page_failed(error):
     """ Handling login failures """
     flash('Login problem', 'danger')
     return redirect('/login')
 
 
-# callback to reload the user object
-@login_manager.user_loader
-def load_user(user_id):
-    return User(user_id)
+# # callback to reload the user object
+# @login_manager.user_loader
+# def load_user(user_id):
+#     return User(user_id)
 
 
 @app.route('/v1/ok')
 def health_check():
+    """ Will return message: OK when called. for monitoring systems. """
     ret = {'message': 'ok'}
     return jsonify(ret), 200
 
@@ -207,11 +212,11 @@ def normalize_string(data, fixed_size=30):
     data = re.sub(r'\W+', '', data)  # remove any non alphanumeric character
     all_alpha = ''
     all_digit = ''
-    for c in data:
-        if c.isalpha():
-            all_alpha += c
-        elif c.isdigit():
-            all_digit += c
+    for this_character in data:
+        if this_character.isalpha():
+            all_alpha += this_character
+        elif this_character.isdigit():
+            all_digit += this_character
 
     missing_zeros = fixed_size - len(all_alpha) - len(all_digit)
 
@@ -342,7 +347,8 @@ def check_serial(serial):
 
 @app.route(f'/v1/{CALL_BACK_TOKEN}/process', methods=['POST'])
 def process():
-    """ This is a callback from curl requests. will get sender and message and will check if it is valid, then answers back. """
+    """ This is a callback from curl requests. will get sender and message and will check if it is valid, then answers back.
+    This is secured by 'CALL_BACK_TOKEN' in order to avoid mal-intended calls. """
     # Note: You need to call back token to send request (post) to process function
     data = request.form
     sender = data['from']
@@ -369,10 +375,9 @@ def process():
 
 @app.errorhandler(404)
 def page_not_found(e):
+    """ Redirect to 404 page in page not found status. """
     return render_template('404.html'), 404
 
 
 if __name__ == '__main__':
-    # import_database_from_excel('data.xlsx')
-    init_processed_sms_table_in_db()
     app.run('0.0.0.0', 5000, debug=True)
