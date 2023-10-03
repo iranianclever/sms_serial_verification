@@ -265,7 +265,7 @@ def import_database_from_excel(filepath):
     serial_counter = 1
     line_number = 1
     total_flashes = 0
-    for index, (line, ref, description, start_serial, end_serial, date) in data_fields.iterrows():
+    for _, (line, ref, description, start_serial, end_serial, date) in data_fields.iterrows():
         line_number += 1
         try:
             start_serial = normalize_string(start_serial)
@@ -279,7 +279,7 @@ def import_database_from_excel(filepath):
             if total_flashes < MAX_FLASH:
                 flash(
                     f'Error inserting line {line_number} from serials sheet SERIALS', 'danger')
-            else:
+            elif total_flashes == MAX_FLASH:
                 flash(f'Too many errors!', 'danger')
 
     # Now lets save the invalid serials
@@ -299,7 +299,7 @@ def import_database_from_excel(filepath):
     total_flashes = 0
     line_number = 1
     data_fields = read_excel(filepath, 1)
-    for index, (failed_serial, ) in data_fields.iterrows():
+    for _, (failed_serial, ) in data_fields.iterrows():
         line_number += 1
         try:
             failed_serial = normalize_string(failed_serial)
@@ -311,7 +311,7 @@ def import_database_from_excel(filepath):
             if total_flashes < MAX_FLASH:
                 flash(
                     f'Error inserting line {line_number} from series sheet INVALIDS', 'danger')
-            else:
+            elif total_flashes == MAX_FLASH:
                 flash(f'Too many errors!', 'danger')
 
     db.close()
@@ -327,50 +327,45 @@ def check_serial(serial):
 
     # Init mysql connection
     db = get_database_connection()
-    cur = db.cursor()
 
-    # Get result invalid serial from db
-    results = cur.execute(
-        "SELECT * FROM invalids WHERE invalid_serial = %s;", (serial, ))
-    # Check results invalid
-    if results > 0:
-        db.close()
-        answer = f"""{original_serial}
-این شماره هولوگرام یافت نشد. لطفا دوباره سعی کنید و یا با واحد پشتیبانی تماس حاصل فرمایید.
-ساختار صحیح شماره هولوگرام به صورت دو حرف انگلیسی و ۷ یا ۸ رقم در دنباله آن می باشد. مثال FA1234567
-شماره تماس با بخش پشتیبانی فروش شرکت ایران تم
-۰۲۱-۰۰۰۰۰۰۰۰"""
-        return 'FAILURE', answer
+    with db.cursor() as cur:
+        # Get result invalid serial from db
+        results = cur.execute(
+            "SELECT * FROM invalids WHERE invalid_serial = %s;", (serial, ))
+        # Check results invalid
+        if results > 0:
+            answer = f"""{original_serial}
+    این شماره هولوگرام یافت نشد. لطفا دوباره سعی کنید و یا با واحد پشتیبانی تماس حاصل فرمایید.
+    ساختار صحیح شماره هولوگرام به صورت دو حرف انگلیسی و ۷ یا ۸ رقم در دنباله آن می باشد. مثال FA1234567
+    شماره تماس با بخش پشتیبانی فروش شرکت ایران تم
+    ۰۲۱-۰۰۰۰۰۰۰۰"""
+            return 'FAILURE', answer
 
-    # Get result serial valid from db
-    results = cur.execute(
-        "SELECT * FROM serials WHERE start_serial <= %s and end_serial >= %s;", (serial, serial))
-    # Double status result
-    if results > 1:
-        db.close()
-        answer = f"""{original_serial}
-این شماره هولوگرام مورد تایید است.
-برای اطلاعات بیشتر از نوع محصول با بخش پشتیبانی فروش شرکت ایران تم تماس حاصل فرمایید.
-۰۲۱-۰۰۰۰۰۰۰۰"""
-        return 'DOUBLE', answer
-    # Check results valid individual
-    elif results == 1:
-        ret = cur.fetchone()
-        desc = ret[2]
-        ref_number = ret[1]
-        date = ret[5].date()
-        db.close()
-        answer = f"""{original_serial}
-{ref_number}
-{desc}
-Hologram date: {date}
-Genuine product of Schneider Electric
-شماره تماس با بخش پشتیبانی فروش شرکت ایران تم
-۰۲۱-۰۰۰۰۰۰۰۰
-"""
-        return 'OK', answer
-
-    db.close()
+        # Get result serial valid from db
+        results = cur.execute(
+            "SELECT * FROM serials WHERE start_serial <= %s and end_serial >= %s;", (serial, serial))
+        # Double status result
+        if results > 1:
+            answer = f"""{original_serial}
+    این شماره هولوگرام مورد تایید است.
+    برای اطلاعات بیشتر از نوع محصول با بخش پشتیبانی فروش شرکت ایران تم تماس حاصل فرمایید.
+    ۰۲۱-۰۰۰۰۰۰۰۰"""
+            return 'DOUBLE', answer
+        # Check results valid individual
+        elif results == 1:
+            ret = cur.fetchone()
+            desc = ret[2]
+            ref_number = ret[1]
+            date = ret[5].date()
+            answer = f"""{original_serial}
+    {ref_number}
+    {desc}
+    Hologram date: {date}
+    Genuine product of Schneider Electric
+    شماره تماس با بخش پشتیبانی فروش شرکت ایران تم
+    ۰۲۱-۰۰۰۰۰۰۰۰
+    """
+            return 'OK', answer
 
     # Return not found status if results not found any serials
     answer = f"""{original_serial}
