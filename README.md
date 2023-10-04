@@ -47,3 +47,8 @@ A project to products sms serial verification
 - [x]  define indexes on mysql
 - [x]  trim too long sms input
 - [x]  add some number to the cards
+- [ ]  are we counting inserts correctly?! :D after the merge
+- [ ]  Kavenegar tell which IPs they use on their admin GUI, be we already implemented another solution
+- [ ]  show Exception errors
+- [ ]  message and answer fields should be rtl
+- [ ]  is it a good idea to insert rows on by one? not sure. but... what to do :| say 100?
