@@ -173,7 +173,7 @@ def logout():
 
 # handle login failed
 @app.errorhandler(401)
-def page_failed(error):
+def unauthorized(error):
     """ Handling login failures """
     flash('Login problem', 'danger')
     return redirect('/login')
@@ -275,7 +275,6 @@ def import_database_from_excel(filepath):
             end_serial = normalize_string(end_serial)
             cur.execute('INSERT INTO serials VALUES (%s, %s, %s, %s, %s, %s);',
                         (line, ref, description, start_serial, end_serial, date))
-            db.commit()
             serial_counter += 1
         except Exception as e:
             total_flashes += 1
@@ -284,6 +283,14 @@ def import_database_from_excel(filepath):
                     f'Error inserting line {line_number} from serials sheet SERIALS, {e}', 'danger')
             elif total_flashes == MAX_FLASH:
                 flash(f'Too many errors!', 'danger')
+
+        if line_number % 20 == 0:
+            try:
+                db.commit()
+            except Exception as e:
+                flash(
+                    f'Problem committing serials into db around {line_number} (Or previous 20 ones); {e}')
+        db.commit()
 
     # Now lets save the invalid serials
 
@@ -307,7 +314,6 @@ def import_database_from_excel(filepath):
         try:
             failed_serial = normalize_string(failed_serial)
             cur.execute('INSERT INTO invalids VALUES (%s);', (failed_serial, ))
-            db.commit()
             invalid_counter += 1
         except Exception as e:
             total_flashes += 1
@@ -317,6 +323,14 @@ def import_database_from_excel(filepath):
             elif total_flashes == MAX_FLASH:
                 flash(f'Too many errors!', 'danger')
 
+        if line_number % 20 == 0:
+            try:
+                db.commit()
+            except Exception as e:
+                flash(
+                    f'Problem committing invalid serials into db around {line_number} (Or previous 20 ones); {e}')
+
+    db.commit()
     db.close()
 
     return (serial_counter, invalid_counter)
@@ -408,7 +422,7 @@ def process():
 
 
 @app.errorhandler(404)
-def page_not_found(e):
+def page_not_found(error):
     """ Redirect to 404 page in page not found status. """
     return render_template('404.html'), 404
 
