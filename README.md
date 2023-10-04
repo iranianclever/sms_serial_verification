@@ -4,15 +4,15 @@ A project to products sms serial verification
 ### How to run
 1. Install python3, pip3, virtualenv, MySQL in your system.
 2. Clone the project `https://github.com/iranianclever/sms_serial_verification && cd sms_serial_verification`
-3. Rename the `config.py.sample` to `config.py` and do proper changes.
+3. In the app folder, rename the `config.py.sample` to `config.py` and do proper changes.
 4. Create a database based on the name in config.py; make it UTF8 compatible (Collation: utf8md4_bin).
 5. Database configs are in config.py, but you also need to add this table to the database manually: `CREATE TABLE PROCESSED_SMS (status ENUM('OK', 'FAILURE', 'DOUBLE', 'NOT-FOUND'), sender CHAR(20), message VARCHAR(400), answer VARCHAR(400), date DATETIME, INDEX(date, status));`
-6. Create a virtualenv using `virtualenv -p python3 build`
-7. Connect to virtualenv using `source build/bin/active`
-8. Install packages using `pip3 install -r requirements.txt`
-9. Now environment is ready run it using `python3 app/main.py`
+6. Create a virtualenv using `virtualenv -p python venv`
+7. Connect to virtualenv using `source venv/bin/active`
+8. From the project folder, install packages using `pip install -r requirements.txt`
+9. Now environment is ready. Run it by `python app/main.py`
 
-### Or you can use Dockerfile to deploy it to docker
+### Or you can use Dockerfile
 
 ## TODO
 - [x]  Farhad seifi https://ngrok.com
