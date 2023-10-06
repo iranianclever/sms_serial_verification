@@ -162,6 +162,76 @@ def check_one_serial():
     return redirect('/')
 
 
+def collision(s1, e1, s2, e2):
+    if s2 <= s1 <= e2:
+        return True
+    if s2 <= e1 <= e2:
+        return True
+    if s1 <= s2 <= e1:
+        return True
+    if s1 <= e2 <= e1:
+        return True
+    return False
+
+
+def separate(input_string):
+    """ Gets AA0000000000000000000090 and return AA, 90 """
+    digit_part = ''
+    alpha_part = ''
+    for character in input_string:
+        if character.isalpha():
+            alpha_part += character
+        elif character.isdigit():
+            digit_part += character
+    return alpha_part, int(digit_part)
+
+
+@app.route('/dbcheck')
+@login_required
+def db_check():
+    """ Will do some sanity checks on the db and will flash the errors. """
+    db = get_database_connection()
+    cur = db.cursor()
+    cur.execute("SELECT id, start_serial, end_serial FROM serials;")
+
+    raw_data = cur.fetchall()
+
+    data = {}
+    flashed = 0
+    for row in raw_data:
+        id_row, start_serial, end_serial = row
+        start_serial_alpha, start_serial_digit = separate(start_serial)
+        end_serial_alpha, end_serial_digit = separate(end_serial)
+        if start_serial_alpha != end_serial_alpha:
+            flashed += 1
+            if flashed < MAX_FLASH:
+                flash(
+                    f'Start serial and end serial of row {id_row} start with different letters.', 'danger')
+            elif flashed == MAX_FLASH:
+                flash(f'Too many starts with difference letters.', 'danger')
+        else:
+            if start_serial_alpha not in data:
+                data[start_serial_alpha] = []
+            data[start_serial_alpha].append(
+                (id_row, start_serial_digit, end_serial_digit))
+    flashed = 0
+    for letters in data:
+        for i in range(len(data[letters])):
+            for j in range(i+1, len(data[letters])):
+                id_row1, ss1, es1 = data[letters][i]
+                id_row2, ss2, es2 = data[letters][j]
+                if collision(ss1, es1, ss2, es2):
+                    flashed += 1
+                    if flashed < MAX_FLASH:
+                        flash(
+                            f'There is a collision between row ids {id_row1} and {id_row2}.', 'danger')
+                    elif flashed == MAX_FLASH:
+                        flash(f'Too many collisions.', 'danger')
+
+    db.close()
+    return redirect('/')
+
+
 @app.route('/logout')
 @login_required
 def logout():
