@@ -1,16 +1,37 @@
+import datetime
 import os
 import re
 import time
-import datetime
+from textwrap import dedent
+
 import requests
-from flask import Flask, jsonify, flash, request, Response, redirect, url_for, abort, render_template
-from flask_login import LoginManager, UserMixin, login_required, login_user, logout_user, current_user
-from pandas import read_excel
+from flask import (
+    Flask,
+    Response,
+    abort,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
+
 from werkzeug.utils import secure_filename
-import MySQLdb
+
 import config
+import MySQLdb
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from flask_login import (
+    LoginManager,
+    UserMixin,
+    current_user,
+    login_required,
+    login_user,
+    logout_user,
+)
+from pandas import read_excel
 
 
 # Sample flask object
@@ -58,18 +79,6 @@ class User(UserMixin):
 user = User(0)
 
 
-def init_processed_sms_table_in_db():
-    """ This function is important for holder sms status and request to server for products or other. """
-    # Init mysql connection
-    db = get_database_connection()
-
-    cur = db.cursor()
-
-    cur.execute("CREATE TABLE IF NOT EXISTS PROCESSED_SMS (status ENUM('OK', 'FAILURE', 'DOUBLE', 'NOT-FOUND'), sender CHAR(20), message VARCHAR(400), answer VARCHAR(400), date DATETIME, INDEX(date, status));")
-    db.commit()
-    db.close()
-
-
 @app.route('/', methods=['GET', 'POST'])
 @login_required
 def home():
@@ -93,9 +102,6 @@ def home():
                 f'Imported {rows} of serials and {failures} rows of failure', 'success')
             os.remove(file_path)  # Remove file from file_path
             return redirect('/')
-
-    # Init processed_sms table in database
-    init_processed_sms_table_in_db()
 
     # Init mysql connection
     db = get_database_connection()
@@ -149,6 +155,14 @@ def login():
             return abort(401)
     else:
         return render_template('login.html')
+
+
+@app.route(f'/v1/{config.REMOTE_ALL_API_KEY}/check_one_serial/<serial>', methods=['GET'])
+def check_one_serial_api(serial):
+    """ To check whether a serial number is valid or not using api caller should use something like /v1/ABCDSECRET/check_one_serial/AA10000 answer back json which is status = DOUBLE, FAILURE, ON, NOT-FOUND """
+    status, answer = check_serial(serial)
+    ret = {'status': status, 'answer': answer}
+    return jsonify(ret), 200
 
 
 @app.route('/check_one_serial', methods=['POST'])
@@ -271,29 +285,37 @@ def send_sms(receptor, message):
         f'message *{message}* send to receptor: {receptor}. status code is {response.status_code}')
 
 
-def normalize_string(data, fixed_size=30):
-    """ Normalization of digits and letters, this function will convert invalid values to valid value to read from database. """
-    from_persian_char = '۱۲۳۴۵۶۷۸۹۰'
-    from_arabic_char = '١٢٣٤٥٦٧٨٩٠'
-    to_char = '1234567890'
-    for i in range(len(to_char)):
-        data = data.replace(from_persian_char[i], to_char[i])
-        data = data.replace(from_arabic_char[i], to_char[i])
-    data = data.upper()
-    data = re.sub(r'\W+', '', data)  # remove any non alphanumeric character
-    all_alpha = ''
-    all_digit = ''
-    for this_character in data:
-        if this_character.isalpha():
-            all_alpha += this_character
-        elif this_character.isdigit():
-            all_digit += this_character
+def normalize_string(serial_number, fixed_size=30):
+    """ Gets a serial number and standardize it as follogins:
+    >> converts(remove, others) all chars to English upper letters and numbers
+    >> adds zeros between letters and numbers to make it fixed length. """
+    serial_number = _remove_non_alphanum_char(serial_number)
+    serial_number = serial_number.upper()
 
-    missing_zeros = fixed_size - len(all_alpha) - len(all_digit)
+    persian_numerals = '۱۲۳۴۵۶۷۸۹۰'
+    arabic_numerals = '١٢٣٤٥٦٧٨٩٠'
+    english_numerals = '1234567890'
 
-    data = all_alpha + '0' * missing_zeros + all_digit
+    serial_number = _translate_numbers(
+        persian_numerals, english_numerals, serial_number)
+    serial_number = _translate_numbers(
+        arabic_numerals, english_numerals, serial_number)
 
-    return data
+    all_digit = "".join(re.findall("\d", serial_number))
+    all_alpha = "".join(re.findall("[A-Z]", serial_number))
+
+    missing_zeros = "0" * (fixed_size - len(all_alpha + all_digit))
+
+    return f'{all_alpha}{missing_zeros}{all_digit}'
+
+
+def _remove_non_alphanum_char(string):
+    return re.sub(r'\W+', '', string)
+
+
+def _translate_numbers(current, new, string):
+    translation_table = str.maketrans(current, new)
+    return translation_table.translate(string)
 
 
 def import_database_from_excel(filepath):
@@ -421,11 +443,11 @@ def check_serial(serial):
             "SELECT * FROM invalids WHERE invalid_serial = %s;", (serial, ))
         # Check results invalid
         if results > 0:
-            answer = f"""{original_serial}
-    این شماره هولوگرام یافت نشد. لطفا دوباره سعی کنید و یا با واحد پشتیبانی تماس حاصل فرمایید.
-    ساختار صحیح شماره هولوگرام به صورت دو حرف انگلیسی و ۷ یا ۸ رقم در دنباله آن می باشد. مثال FA1234567
-    شماره تماس با بخش پشتیبانی فروش شرکت ایران تم
-    ۰۲۱-۰۰۰۰۰۰۰۰"""
+            answer = dedent(f"""{original_serial}
+                این شماره هولوگرام یافت نشد. لطفا دوباره سعی کنید و یا با واحد پشتیبانی تماس حاصل فرمایید.
+                ساختار صحیح شماره هولوگرام به صورت دو حرف انگلیسی و ۷ یا ۸ رقم در دنباله آن می باشد. مثال FA1234567
+                شماره تماس با بخش پشتیبانی فروش شرکت ایران تم
+                ۰۲۱-۰۰۰۰۰۰۰۰""")
             return 'FAILURE', answer
 
         # Get result serial valid from db
@@ -433,10 +455,10 @@ def check_serial(serial):
             "SELECT * FROM serials WHERE start_serial <= %s and end_serial >= %s;", (serial, serial))
         # Double status result
         if results > 1:
-            answer = f"""{original_serial}
-    این شماره هولوگرام مورد تایید است.
-    برای اطلاعات بیشتر از نوع محصول با بخش پشتیبانی فروش شرکت ایران تم تماس حاصل فرمایید.
-    ۰۲۱-۰۰۰۰۰۰۰۰"""
+            answer = dedent(f"""{original_serial}
+                این شماره هولوگرام مورد تایید است.
+                برای اطلاعات بیشتر از نوع محصول با بخش پشتیبانی فروش شرکت ایران تم تماس حاصل فرمایید.
+                ۰۲۱-۰۰۰۰۰۰۰۰""")
             return 'DOUBLE', answer
         # Check results valid individual
         elif results == 1:
@@ -444,23 +466,22 @@ def check_serial(serial):
             desc = ret[2]
             ref_number = ret[1]
             date = ret[5].date()
-            answer = f"""{original_serial}
-    {ref_number}
-    {desc}
-    Hologram date: {date}
-    Genuine product of Schneider Electric
-    شماره تماس با بخش پشتیبانی فروش شرکت ایران تم
-    ۰۲۱-۰۰۰۰۰۰۰۰
-    """
+            answer = dedent(f"""{original_serial}
+                {ref_number}
+                {desc}
+                Hologram date: {date}
+                Genuine product of Schneider Electric
+                شماره تماس با بخش پشتیبانی فروش شرکت ایران تم
+                ۰۲۱-۰۰۰۰۰۰۰۰""")
             return 'OK', answer
 
     # Return not found status if results not found any serials
-    answer = f"""{original_serial}
-این شماره هولوگرام یافت نشد. لطفا دوباره سعی کنید و یا با واحد پشتیبانی تماس حاصل فرمایید.
-ساختار صحیح شماره هولوگرام بصورت دو حرف انگلیسی و ۷ یا ۸ رقم در دنباله آن می باشد. مثال: 
-FA1234567
-شماره تماس با بخش پشتیبانی فروش شرکت ایران تم:
-۰۲۱-۰۰۰۰۰۰۰۰"""
+    answer = dedent(f"""{original_serial}
+        این شماره هولوگرام یافت نشد. لطفا دوباره سعی کنید و یا با واحد پشتیبانی تماس حاصل فرمایید.
+        ساختار صحیح شماره هولوگرام بصورت دو حرف انگلیسی و ۷ یا ۸ رقم در دنباله آن می باشد. مثال: 
+        FA1234567
+        شماره تماس با بخش پشتیبانی فروش شرکت ایران تم:
+        ۰۲۱-۰۰۰۰۰۰۰۰""")
     return 'NOT-FOUND', answer
 
 
@@ -497,5 +518,21 @@ def page_not_found(error):
     return render_template('404.html'), 404
 
 
+def create_sms_table():
+    """ Creates PROCESSED_SMS table on database if it's not exists. """
+    # Init mysql connection
+    db = get_database_connection()
+    cur = db.cursor()
+
+    try:
+        cur.execute("CREATE TABLE IF NOT EXISTS PROCESSED_SMS (status ENUM('OK', 'FAILURE', 'DOUBLE', 'NOT-FOUND'), sender CHAR(20), message VARCHAR(400), answer VARCHAR(400), date DATETIME, INDEX(date, status));")
+        db.commit()
+    except Exception as e:
+        flash(f'Error creating PROCESSED_SMS table; {e}', 'danger')
+
+    db.close()
+
+
 if __name__ == '__main__':
-    app.run('0.0.0.0', 5000, debug=True)
+    create_sms_table()
+    app.run('0.0.0.0', 5000, debug=False)
