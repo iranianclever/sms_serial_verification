@@ -319,7 +319,7 @@ def check_serial(serial):
     with db.cursor() as cur:
         # Get result invalid serial from db
         results = cur.execute(
-            "SELECT * FROM invalids WHERE invalid_serial = %s", (serial, ))
+            "SELECT * FROM invalids WHERE invalid_serial = %s", (serial,))
         # Check results invalid
         if results > 0:
             answer = dedent(f"""
