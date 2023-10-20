@@ -2,6 +2,7 @@ import datetime
 import os
 import re
 import time
+import subprocess
 from textwrap import dedent
 
 import requests
@@ -62,7 +63,7 @@ def allowed_file(filename):
 
 
 # A secure key to protect app
-app.config.update(SECRET_KEY=config.SECRET_KEY)
+app.config.update(SECRET_KEY=config.SECRET_KEY, DEBUG=True)
 
 
 class User(UserMixin):
@@ -77,6 +78,49 @@ class User(UserMixin):
 
 
 user = User(0)
+
+
+@app.route('/db_status/', methods=['GET'])
+@login_required
+def db_status():
+    """ show some status about the DB """
+
+    db = get_database_connection()
+    cur = db.cursor()
+
+    # collect some stats for the GUI
+    try:
+        cur.execute("SELECT count(*) FROM serials")
+        num_serials = cur.fetchone()[0]
+    except:
+        num_serials = 'can not query serials count'
+
+    try:
+        cur.execute("SELECT count(*) FROM invalids")
+        num_invalids = cur.fetchone()[0]
+    except:
+        num_invalids = 'can not query invalid count'
+
+    try:
+        cur.execute("SELECT log_value FROM logs WHERE log_name = 'import'")
+        log_import = cur.fetchone()[0]
+    except:
+        log_import = 'can not read import log results... yet'
+
+    try:
+        cur.execute("SELECT log_value FROM logs WHERE log_name = 'db_filename'")
+        log_filename = cur.fetchone()[0]
+    except:
+        log_filename = 'can not read db filename from database'
+
+    try:
+        cur.execute("SELECT log_value FROM logs WHERE log_name = 'db_check'")
+        log_db_check = cur.fetchone()[0]
+    except:
+        log_db_check = 'Can not read db_check logs... yet'
+
+    return render_template('db_status.html', data={'serials': num_serials, 'invalids': num_invalids,
+                                                   'log_import': log_import, 'log_db_check': log_db_check, 'log_filename': log_filename})
 
 
 @app.route('/', methods=['GET', 'POST'])
@@ -95,12 +139,12 @@ def home():
             return redirect(request.url)
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
+            filename.replace(' ', '_')
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(file_path)
-            rows, failures = import_database_from_excel(file_path)
+            subprocess.Popen(['python', 'import_db.py', file_path])
             flash(
-                f'Imported {rows} of serials and {failures} rows of failure', 'success')
-            os.remove(file_path)  # Remove file from file_path
+                'File uploaded. Will be imported soon. Follow from DB Status page.', 'info')
             return redirect('/')
 
     # Init mysql connection
@@ -115,27 +159,37 @@ def home():
     for sms in all_smss:
         status, sender, message, answer, date = sms
         smss.append({'status': status, 'sender': sender, 'message': message,
-                    'answer': answer, 'date': date})
+                     'answer': answer, 'date': date})
 
     # Collect some stats for the GUI
-    cur.execute("SELECT count(*) FROM PROCESSED_SMS WHERE status = 'OK';")
-    num_ok = cur.fetchone()[0]
+    try:
+        cur.execute("SELECT count(*) FROM PROCESSED_SMS WHERE status = 'OK';")
+        num_ok = cur.fetchone()[0]
+    except:
+        num_ok = 'error'
 
-    cur.execute("SELECT count(*) FROM PROCESSED_SMS WHERE status = 'FAILURE';")
-    num_failure = cur.fetchone()[0]
+    try:
+        cur.execute(
+            "SELECT count(*) FROM PROCESSED_SMS WHERE status = 'FAILURE';")
+        num_failure = cur.fetchone()[0]
+    except:
+        num_failure = 'error'
 
-    cur.execute("SELECT count(*) FROM PROCESSED_SMS WHERE status = 'DOUBLE';")
-    num_double = cur.fetchone()[0]
+    try:
+        cur.execute(
+            "SELECT count(*) FROM PROCESSED_SMS WHERE status = 'DOUBLE';")
+        num_double = cur.fetchone()[0]
+    except:
+        num_double = 'error'
 
-    cur.execute("SELECT count(*) FROM PROCESSED_SMS WHERE status = 'NOT-FOUND';")
-    num_notfound = cur.fetchone()[0]
+    try:
+        cur.execute(
+            "SELECT count(*) FROM PROCESSED_SMS WHERE status = 'NOT-FOUND';")
+        num_notfound = cur.fetchone()[0]
+    except:
+        num_notfound = 'error'
 
     return render_template('index.html', data={'smss': smss, 'ok': num_ok, 'failure': num_failure, 'double': num_double, 'notfound': num_notfound})
-
-
-def get_database_connection():
-    return MySQLdb.connect(host=config.MYSQL_HOST, user=config.MYSQL_USERNAME,
-                           passwd=config.MYSQL_PASSWORD, db=config.MYSQL_DB_NAME, charset='utf8')
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -176,93 +230,6 @@ def check_one_serial():
     return redirect('/')
 
 
-@app.route('/dbcheck/<output>/')
-@login_required
-def db_check(output):
-    """ Will do some sanity checks on the db and will flash the errors. """
-    if output == 'gui':
-        raw_output = False
-    else:
-        raw_output = True
-
-    def collision(s1, e1, s2, e2):
-        if s2 <= s1 <= e2:
-            return True
-        if s2 <= e1 <= e2:
-            return True
-        if s1 <= s2 <= e1:
-            return True
-        if s1 <= e2 <= e1:
-            return True
-        return False
-
-    def separate(input_string):
-        """ gets AA0000000000000000000000000090 and returns AA, 90 """
-        digit_part = ''
-        alpha_part = ''
-        for character in input_string:
-            if character.isalpha():
-                alpha_part += character
-            elif character.isdigit():
-                digit_part += character
-        return alpha_part, int(digit_part)
-
-    db = get_database_connection()
-    cur = db.cursor()
-
-    cur.execute("SELECT id, start_serial, end_serial FROM serials")
-
-    raw_data = cur.fetchall()
-
-    if raw_output:
-        all_problems = []
-
-    data = {}
-    flashed = 0
-    for row in raw_data:
-        id_row, start_serial, end_serial = row
-        start_serial_alpha, start_serial_digit = separate(start_serial)
-        end_serial_alpha, end_serial_digit = separate(end_serial)
-        if start_serial_alpha != end_serial_alpha:
-            if raw_output:
-                all_problems.append(
-                    f'start serial and end serial of row {id_row} start with different letters')
-            else:
-                flashed += 1
-                if flashed < MAX_FLASH:
-                    flash(
-                        f'start serial and end serial of row {id_row} start with different letters', 'danger')
-                elif flashed == MAX_FLASH:
-                    flash('too many starts with different letters', 'danger')
-        else:
-            if start_serial_alpha not in data:
-                data[start_serial_alpha] = []
-            data[start_serial_alpha].append(
-                (id_row, start_serial_digit, end_serial_digit))
-
-    flashed = 0
-    for letters in data:
-        for i in range(len(data[letters])):
-            for j in range(i+1, len(data[letters])):
-                id_row1, ss1, es1 = data[letters][i]
-                id_row2, ss2, es2 = data[letters][j]
-                if collision(ss1, es1, ss2, es2):
-                    if raw_output:
-                        all_problems.append(
-                            f'there is a collision between row ids {id_row1} and {id_row2}')
-                    else:
-                        flashed += 1
-                        if flashed < MAX_FLASH:
-                            flash(
-                                f'there is a collision between row ids {id_row1} and {id_row2}', 'danger')
-                        elif flashed == MAX_FLASH:
-                            flash(f'Too many collisions', 'danger')
-    if raw_output:
-        return "<br>".join(all_problems)
-    else:
-        return redirect('/')
-
-
 @app.route('/logout')
 @login_required
 def logout():
@@ -293,6 +260,11 @@ def health_check():
     return jsonify(ret), 200
 
 
+def get_database_connection():
+    return MySQLdb.connect(host=config.MYSQL_HOST, user=config.MYSQL_USERNAME,
+                           passwd=config.MYSQL_PASSWORD, db=config.MYSQL_DB_NAME, charset='utf8')
+
+
 def send_sms(receptor, message):
     """ This function will get a MSISDN and a message, then uses KaveNegar to send sms.  """
     url = f'https://api.kavenegar.com/v1/{config.API_KEY}/sms/send.json'
@@ -300,6 +272,15 @@ def send_sms(receptor, message):
     response = requests.post(url, data)
     print(
         f'message *{message}* send to receptor: {receptor}. status code is {response.status_code}')
+
+
+def _remove_non_alphanum_char(string):
+    return re.sub(r'\W+', '', string)
+
+
+def _translate_numbers(current, new, string):
+    translation_table = str.maketrans(current, new)
+    return string.translate(translation_table)
 
 
 def normalize_string(serial_number, fixed_size=30):
@@ -326,125 +307,6 @@ def normalize_string(serial_number, fixed_size=30):
     return f'{all_alpha}{missing_zeros}{all_digit}'
 
 
-def _remove_non_alphanum_char(string):
-    return re.sub(r'\W+', '', string)
-
-
-def _translate_numbers(current, new, string):
-    translation_table = str(str.maketrans(current, new))
-    return translation_table.translate(string)
-
-
-def import_database_from_excel(filepath):
-    """ Gets an excel file name and imports lookup data (data and failures) from it.
-    the first sheet contains serial data like:
-     Row - Reference Number - Description - Start Serial - End Serial - Date
-    and the 2nd (1) contains a column of invalid serials.
-
-    This data will be written into the sqlite database located at config.DATA_FILE_PATH
-    in two tables. 'serials' and 'invalids'
-
-    return two integers: (number of serial rows, number of invalid rows)
-    """
-    # df contains lookup data in the form of
-
-    # Init mysql connection
-    db = get_database_connection()
-
-    # Our mysql database will contain two tables: serials and invalids
-    cur = db.cursor()
-
-    total_flashes = 0
-
-    try:
-        # Remove the serials table if exists, then create the new one
-        cur.execute('DROP TABLE IF EXISTS serials;')
-        cur.execute("""CREATE TABLE serials (
-            id INTEGER PRIMARY KEY,
-            ref VARCHAR(200),
-            description VARCHAR(200),
-            start_serial CHAR(30),
-            end_serial CHAR(30),
-            date DATETIME,
-            INDEX (start_serial, end_serial)
-        );""")
-        db.commit()
-    except Exception as e:
-        flash(
-            f'Problem dropping and creating new table in database, {e}', 'danger')
-
-    df = read_excel(filepath, 0)
-    serial_counter = 1
-    line_number = 1
-
-    for _, (line, ref, description, start_serial, end_serial, date) in df.iterrows():
-        line_number += 1
-        try:
-            start_serial = normalize_string(start_serial)
-            end_serial = normalize_string(end_serial)
-            cur.execute('INSERT INTO serials VALUES (%s, %s, %s, %s, %s, %s);',
-                        (line, ref, description, start_serial, end_serial, date))
-            serial_counter += 1
-        except Exception as e:
-            total_flashes += 1
-            if total_flashes < MAX_FLASH:
-                flash(
-                    f'Error inserting line {line_number} from serials sheet SERIALS, {e}', 'danger')
-            elif total_flashes == MAX_FLASH:
-                flash(f'Too many errors!', 'danger')
-
-        if line_number % 20 == 0:
-            try:
-                db.commit()
-            except Exception as e:
-                flash(
-                    f'Problem committing serials into db around {line_number} (Or previous 20 ones); {e}')
-        db.commit()
-
-    # Now lets save the invalid serials
-
-    try:
-        # Remove the invalid table if exists, then create the new one
-        cur.execute('DROP TABLE IF EXISTS invalids;')
-        cur.execute("""CREATE TABLE invalids(
-                    invalid_serial CHAR(30),
-                    INDEX (invalid_serial)
-        );""")
-        db.commit()
-    except Exception as e:
-        flash(f'Error dropping and creating INVALIDS tables, {e}', 'danger')
-
-    invalid_counter = 1
-    # total_flashes = 0
-    line_number = 1
-    df = read_excel(filepath, 1)
-    for _, (failed_serial, ) in df.iterrows():
-        line_number += 1
-        try:
-            failed_serial = normalize_string(failed_serial)
-            cur.execute('INSERT INTO invalids VALUES (%s);', (failed_serial, ))
-            invalid_counter += 1
-        except Exception as e:
-            total_flashes += 1
-            if total_flashes < MAX_FLASH:
-                flash(
-                    f'Error inserting line {line_number} from series sheet INVALIDS, {e}', 'danger')
-            elif total_flashes == MAX_FLASH:
-                flash(f'Too many errors!', 'danger')
-
-        if line_number % 20 == 0:
-            try:
-                db.commit()
-            except Exception as e:
-                flash(
-                    f'Problem committing invalid serials into db around {line_number} (Or previous 20 ones); {e}')
-
-    db.commit()
-    db.close()
-
-    return (serial_counter, invalid_counter)
-
-
 def check_serial(serial):
     """ this function will get one serial number and return appropriate answer to that, after consulting the db. """
 
@@ -457,10 +319,11 @@ def check_serial(serial):
     with db.cursor() as cur:
         # Get result invalid serial from db
         results = cur.execute(
-            "SELECT * FROM invalids WHERE invalid_serial = %s;", (serial, ))
+            "SELECT * FROM invalids WHERE invalid_serial = %s", (serial, ))
         # Check results invalid
         if results > 0:
-            answer = dedent(f"""{original_serial}
+            answer = dedent(f"""
+                {original_serial}
                 این شماره هولوگرام یافت نشد. لطفا دوباره سعی کنید و یا با واحد پشتیبانی تماس حاصل فرمایید.
                 ساختار صحیح شماره هولوگرام به صورت دو حرف انگلیسی و ۷ یا ۸ رقم در دنباله آن می باشد. مثال FA1234567
                 شماره تماس با بخش پشتیبانی فروش شرکت ایران تم
@@ -469,10 +332,11 @@ def check_serial(serial):
 
         # Get result serial valid from db
         results = cur.execute(
-            "SELECT * FROM serials WHERE start_serial <= %s and end_serial >= %s;", (serial, serial))
+            "SELECT * FROM serials WHERE start_serial <= %s and end_serial >= %s", (serial, serial))
         # Double status result
         if results > 1:
-            answer = dedent(f"""{original_serial}
+            answer = dedent(f"""
+                {original_serial}
                 این شماره هولوگرام مورد تایید است.
                 برای اطلاعات بیشتر از نوع محصول با بخش پشتیبانی فروش شرکت ایران تم تماس حاصل فرمایید.
                 ۰۲۱-۰۰۰۰۰۰۰۰""")
@@ -483,22 +347,24 @@ def check_serial(serial):
             desc = ret[2]
             ref_number = ret[1]
             date = ret[5].date()
-            answer = dedent(f"""{original_serial}
+            rettext = ret[6] + '\n' + ret[7]
+            answer = dedent(f"""
+                {original_serial}
                 {ref_number}
                 {desc}
                 Hologram date: {date}
-                Genuine product of Schneider Electric
-                شماره تماس با بخش پشتیبانی فروش شرکت ایران تم
-                ۰۲۱-۰۰۰۰۰۰۰۰""")
+                {rettext}""")
             return 'OK', answer
 
     # Return not found status if results not found any serials
-    answer = dedent(f"""{original_serial}
+    answer = dedent(f"""
+        {original_serial}
         این شماره هولوگرام یافت نشد. لطفا دوباره سعی کنید و یا با واحد پشتیبانی تماس حاصل فرمایید.
-        ساختار صحیح شماره هولوگرام بصورت دو حرف انگلیسی و ۷ یا ۸ رقم در دنباله آن می باشد. مثال: 
+        ساختار صحیح شماره هولوگرام بصورت دو حرف انگلیسی و ۷ یا ۸ رقم در دنباله آن می باشد. مثال:
         FA1234567
         شماره تماس با بخش پشتیبانی فروش شرکت ایران تم:
         ۰۲۱-۰۰۰۰۰۰۰۰""")
+
     return 'NOT-FOUND', answer
 
 
@@ -518,15 +384,22 @@ def process():
 
     cur = db.cursor()
 
-    now = time.strftime('%Y-%m-%d %H:%M:%S')
-    cur.execute("INSERT INTO PROCESSED_SMS (status, sender, message, answer, date) VALUES (%s, %s, %s, %s, %s)",
-                (status, sender, message, answer, now))
+    log_new_sms(status, sender, message, answer, cur)
+
     db.commit()
     db.close()
 
     send_sms(sender, answer)
     ret = {'message': 'processed!'}
     return jsonify(ret), 200
+
+
+def log_new_sms(status, sender, message, answer, cur):
+    if len(message) > 40:
+        return
+    now = time.strftime('%Y-%m-%d %H:%M:%S')
+    cur.execute("INSERT INTO PROCESSED_SMS (status, sender, message, answer, date) VALUES (%s, %s, %s, %s, %s)",
+                (status, sender, message, answer, now))
 
 
 @app.errorhandler(404)
@@ -552,4 +425,4 @@ def create_sms_table():
 
 if __name__ == '__main__':
     create_sms_table()
-    app.run('0.0.0.0', 5000, debug=False)
+    app.run('0.0.0.0', 5000, debug=True)
