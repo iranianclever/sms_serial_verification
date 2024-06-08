@@ -211,7 +211,7 @@ def login():
         return render_template('login.html')
 
 
-@app.route(f'/v1/{config.REMOTE_ALL_API_KEY}/check_one_serial/<serial>', methods=['GET'])
+@app.route(f'/v1/{config.REMOTE_CALL_API_KEY}/check_one_serial/<serial>', methods=['GET'])
 def check_one_serial_api(serial):
     """ To check whether a serial number is valid or not using api caller should use something like /v1/ABCDSECRET/check_one_serial/AA10000 answer back json which is status = DOUBLE, FAILURE, ON, NOT-FOUND """
     status, answer = check_serial(serial)
@@ -320,6 +320,7 @@ def check_serial(serial):
         # Get result invalid serial from db
         results = cur.execute(
             "SELECT * FROM invalids WHERE invalid_serial = %s", (serial,))
+        print(serial)
         # Check results invalid
         if results > 0:
             answer = dedent(f"""
